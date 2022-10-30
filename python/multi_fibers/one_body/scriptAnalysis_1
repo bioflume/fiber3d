@@ -1,0 +1,19 @@
+file=run1
+folder=data/
+
+echo folder = $folder
+echo file = $file
+
+# echo force_generators
+# python ../../tools/bodies_to_xyz.py data.main for "$folder""$file".centrosome_1.clones > "$folder""$file".centrosome_1.xyz
+
+echo bodies
+python ../../tools/bodies_to_xyz.py data.main body_N_1 "$folder""$file".body_N_1.clones > "$folder""$file".body_N_1.xyz
+
+
+echo fibers
+rm  "$folder""$file".body_N_1*.fibers*lines
+python ../../tools/lines.py "$folder""$file".body_N_1.fibers "$folder""$file".body_N_1.fibers. .lines
+
+
+

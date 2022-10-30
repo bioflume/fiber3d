@@ -1,0 +1,31 @@
+# Length, time and mass are given in units of microns, seconds and miligrams.
+
+# Select scheme to integrate Brownian equations
+scheme                                   mobility
+
+# Solver params
+solver_tolerance                         1.0e-12
+
+# Set fluid viscosity (eta), gravity*blob_mass (g) and blob radius
+eta                                      1.0
+
+# Set output name
+output_name                              data/convergence/run
+save_clones                              one_file
+
+# Define rigid bodies
+structure sphere.shape Structures/sphere.clones
+
+# Force file
+force_file                               forces.dat
+
+# Plot options
+plot_velocity_field                      -10 10 50 -10 10 50 -10 10 50
+
+
+
+# Set time step, number of steps and save frequency
+dt                                       1
+n_steps                                  10
+n_save                                   1
+initial_step                             0
