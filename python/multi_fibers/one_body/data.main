@@ -1,0 +1,43 @@
+# Select scheme
+# scheme                                   linear_solver_new
+# scheme                                   linear_solver_fibers
+scheme                                   linear_solver_fibers_and_bodies
+
+# Time step and number of steps
+dt                                       1e-02
+n_steps                                  8000
+n_save                                   20
+initial_step                             0
+
+
+# Viscosity
+eta                                      1.0
+
+# General fibers info
+num_points_fibers                        32
+E                                        1.0
+length_fibers                            5
+num_points_finite_diff                   11
+v_growth                                 0.0
+v_shrink                                 0.065
+force_stall                              1.0
+rate_catastrophe                         0.00001
+rate_catastrophe_stall                   1e+03
+rate_rescue                              0.014
+length_min                               0.4
+
+
+
+# Structures
+# structure_fibers                         Structures/one.fibers
+structure_body_fibers                    Structures/body_N_1.vertex  Structures/body_N_1.clones Structures/body_N_1.fibers  Structures/body_N_1.links
+
+# Set tolerance
+solver_tolerance                         1e-12
+
+# Seed
+seed                                     1
+
+# Output file
+output_name                              data/run1
+

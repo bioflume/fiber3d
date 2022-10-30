@@ -1,0 +1,39 @@
+# Select scheme
+scheme                                   linear_solver_fibers
+
+# Time step and number of steps
+dt                                       1e-05
+n_steps                                  10000
+n_save                                   10
+initial_step                             0
+
+
+# Viscosity
+eta                                      1
+
+# General fibers info
+num_points_fibers                        32
+E                                        0.1
+num_points_finite_diff                   12
+v_growth                                 0
+v_shrink                                 0
+force_stall                              4.4
+rate_catastrophe                         0
+rate_catastrophe_stall                   0
+rate_rescue                              0
+length_min                               0.3
+
+
+
+# Structures
+structure_fibers                         /mnt/home/fbalboausabiaga/people/Ondrej/Structures/fiber_L_2_N_12_config_1.fibers  
+
+# Set tolerance
+solver_tolerance                         1e-10
+
+# Seed
+seed                                     1
+
+# Output file
+output_name                              /mnt/home/fbalboausabiaga/people/Ondrej/data/one/run1
+                                           
