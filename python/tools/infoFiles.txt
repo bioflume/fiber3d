@@ -1,0 +1,24 @@
+Clones: contains rigid particles, 
+1st line: # of particles
+2nd line: x y z and quaternions
+(radius of the body is determined by the radius in body_forces)
+
+fibers: contains MTs, fibers
+1st line: # of fibers
+Npoints Bending module length 
+coordinates 
+(coordinates are ordered in such a way that the first point is 
+where the fiber is attached to a body)
+
+this repeats for every fiber
+
+links: anchor points on PNC
+# of anchor points = # of fibers
+first 2 columns have no meaning, then x y z location of points,
+then orientation of fibers (mostly, the normal direction)
+(link coordinates assume that the body is at the origin)
+
+force generator: # of molecular motors 
+their positions, these attach fibers to PNC (?)
+
+vertex: incomplete for points on rigid particle to solve for fluid problem

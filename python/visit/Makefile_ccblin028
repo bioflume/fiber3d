@@ -1,0 +1,31 @@
+#
+# Compile with gcc-4.8.5 and py3.6 from conda
+#
+
+
+
+
+
+# location of the Python header files
+PYTHON_VERSION = 3.6
+PYTHON_DIR = /mnt/home/fbalboausabiaga/.miniconda3
+PYTHON_INCLUDE = $(PYTHON_DIR)/include/python$(PYTHON_VERSION)m
+PYTHON_LIB = $(PYTHON_DIR)/lib/python$(PYTHON_VERSION)/config-3.6m-x86_64-linux-gnu/
+
+# location of the Boost Python include files and library
+# BOOST_INC = /usr/include/boost
+BOOST_INC = /mnt/home/fbalboausabiaga/.miniconda3/include
+BOOST_LIB = /mnt/home/fbalboausabiaga/.miniconda3/lib
+
+# compile mesh classes
+TARGET = visit_writer_interface
+
+$(TARGET).so: $(TARGET).o
+	g++ -shared  -dynamiclib $(TARGET).o -L$(BOOST_LIB)  -lboost_python36 -lboost_numpy36 -L$(PYTHON_LIB) -lpython$(PYTHON_VERSION)m -o $(TARGET).so
+
+$(TARGET).o: $(TARGET).cc
+	g++ -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c $(TARGET).cc
+	g++ -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c visit_writer.c
+
+clean: 
+	rm -f $(TARGET).o $(TARGET).so visit_writer.o

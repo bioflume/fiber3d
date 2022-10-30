@@ -1,0 +1,43 @@
+typeset -i n n_max
+
+n=5002
+n_max=5002
+dt=0.25
+
+while [ $n -le $n_max ]
+do
+echo n $n
+
+file=run"$n".0.0
+folder=/mnt/home/gkabacaoglu/codes/fiber-private/python/multi_fibers/many/data/run"$n"/
+echo folder = $folder
+echo file = $file
+
+
+# Get bodies to dat files
+python ../tools/get_body.py "$folder""$file".centrosome.1."$file".clones 1 0 $dt > "$folder""$file".centrosome.1."$file".dat
+python ../tools/get_body.py "$folder""$file".centrosome.2."$file".clones 1 0 $dt > "$folder""$file".centrosome.2."$file".dat
+
+
+# Get distance between centrosomes
+# python ../tools/distance_between_bodies.py "$folder""$file".centrosome.1."$file".dat "$folder""$file".centrosome.2."$file".dat > "$folder""$file".distance_centrosomes.dat
+
+# Get distance to the nucleus
+# python ../tools/distance_to_nucleus.py "$folder""$file".centrosome.1."$file".dat > "$folder""$file".centrosome.1.distance_to_nucleus.dat
+# python ../tools/distance_to_nucleus.py "$folder""$file".centrosome.2."$file".dat > "$folder""$file".centrosome.2.distance_to_nucleus.dat
+
+
+# Get bodies to xyz files
+echo bodies
+python ../tools/bodies_to_xyz.py "$folder""$file".inputfile centrosome.1."$file" "$folder""$file".centrosome.1."$file".clones > "$folder""$file".centrosome.1.xyz
+python ../tools/bodies_to_xyz.py "$folder""$file".inputfile centrosome.2."$file" "$folder""$file".centrosome.2."$file".clones > "$folder""$file".centrosome.2.xyz
+
+
+# Get fibers to lines files
+echo fibers
+python ../tools/lines.py "$folder""$file".centrosome.1."$file".fibers "$folder""$file".centrosome.1."$file".fibers. .lines
+python ../tools/lines.py "$folder""$file".centrosome.2."$file".fibers "$folder""$file".centrosome.2."$file".fibers. .lines
+
+n=$n+1
+done
+
