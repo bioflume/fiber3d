@@ -11,9 +11,9 @@ if __name__ == '__main__':
   body_shape = 'ellipsoid'
   body_a = 2
   body_b = 2
-  body_c = 4
-  velMeasureRad = 5
-  velMeasureP = 12
+  body_c = 4 # largest radius
+  velMeasureRad = 2 * (2*body_c) # velocity on a shell of radius r = 2 * b, b: the largest diameter of the swimmer 
+  velMeasureP = 16 # Chebyshev orderks
   num_fibers = 200
   fiber_position = None
   #fiber_position = []
@@ -28,7 +28,7 @@ if __name__ == '__main__':
   filename = '/mnt/ceph/users/gkabacaoglu/SVTGRuns/fbgk/test6/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
-  ncompute_vel = 50
+  ncompute_vel = 450
 
   random_seed = 1
   time_step_scheme = 'time_step_hydro'
@@ -60,7 +60,7 @@ if __name__ == '__main__':
                                   output_name=filename,
                                   save_file = None,
                                   precompute_body_PC = precompute_body_PC,
-                                  useFMM = True,
+                                  useFMM = False,
                                   Nblobs = Nbody,
                                   iupsample = False,
                                   uprate = 4,
@@ -76,7 +76,7 @@ if __name__ == '__main__':
   prams = initialize.set_parameters(eta = 1,
       epsilon = 1e-03,
       Efib = 1,
-      final_time = 2400,
+      final_time = 250,
       fiber_body_attached = True,
       fiber_length = fiber_length,
       num_fibers = num_fibers,

@@ -1,0 +1,30 @@
+#
+# Use with boost 1.63 or newer.
+#
+
+# location of the Python header files
+PYTHON_VERSION = 3.8
+PYTHON_DIR = /home/fbalboa/miniconda3/envs/py3.8
+PYTHON_INCLUDE = $(PYTHON_DIR)/include/python$(PYTHON_VERSION)
+PYTHON_LIB = $(PYTHON_DIR)/lib/python$(PYTHON_VERSION)/config/
+
+# location of the Boost Python include files and library
+#BOOST_INC = /home/fbalboa/miniconda3/envs/py3.8/include
+#BOOST_LIB = /home/fbalboa/miniconda3/envs/py3.8/lib
+BOOST_INC = /usr/include
+BOOST_LIB = /usr/lib/x86_64-linux-gnu
+
+# compile mesh classes
+TARGET = visit_writer_interface
+
+#	g++ -shared  -dynamiclib $(TARGET).o -L$(BOOST_LIB) -lboost_python -lboost_numpy -L$(PYTHON_LIB) -lpython$(PYTHON_VERSION) -o $(TARGET).so
+$(TARGET).so: $(TARGET).o
+	g++ -shared  -dynamiclib $(TARGET).o -L$(BOOST_LIB)  -lboost_python38 -lboost_numpy38 -L$(PYTHON_LIB) -lpython$(PYTHON_VERSION) -o $(TARGET).so
+
+
+$(TARGET).o: $(TARGET).cc
+	g++ -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c $(TARGET).cc
+	g++ -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c visit_writer.c
+
+clean: 
+	rm -f $(TARGET).o $(TARGET).so

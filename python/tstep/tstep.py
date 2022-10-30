@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+from multi.translate_rotate_grid import get_vectors_frame_body
 import numpy as np
 from functools import partial
 import scipy.linalg as scla
@@ -179,7 +180,31 @@ class tstep(object):
       self.MM_on_moving_surf, self.bodies_mm_attached, self.bodies_types_mm_attached, self.bodies_names_mm_attached, self.f_bodies_mm_attached_ID, self.f_bodies_mm_attached_forces_ID, self.f_mm_on_moving_surf_ID = [], [], [], [], [], [], []
 
     self.body_like_shell = []
-  
+    self.bodies_ref = copy.copy(self.bodies) # reference bodies
+    
+    # Chebyshev grid around the swimmer is generated (centered at the origin)
+    # this is the reference configuration, it will rotated and translated based on swimmer
+    self.ref_grid_cheb = generateGrid.generate_grid(self.velP, self.velMeasureRad)
+    
+    # Generate the cubic grid
+    if prams.body_shape == 'ellipsoid':
+      max_size = np.max([prams.body_a, prams.body_b, prams.body_c]) # max radius
+      Lcube = 3*(2*max_size) # 3 * max_diameter
+      Ncube = 100
+      xg = np.linspace(-Lcube/2,Lcube/2,Ncube)
+      [xx, yy, zz] = np.meshgrid(xg,xg,xg,sparse=False,indexing='ij')
+      self.ref_grid_cube = np.concatenate((xx.flatten(), yy.flatten(), zz.flatten()), axis = 1)    
+    
+    name = options.output_name + '_ref_cheb_grid.txt'
+    with open(name, 'w') as f:
+      np.savetxt(f, self.ref_grid_cheb)
+      f.close()
+    
+    name = options.output_name + '_ref_cube_grid.txt'
+    with open(name, 'w') as f:
+      np.savetxt(f, self.ref_grid_cube)
+      f.close()
+    
     self.f_fiber_tips = None
     name = options.output_name + '_fiberTips.txt'
     self.f_fiber_tips = open(name, 'wb', buffering = 100)
@@ -1154,110 +1179,6 @@ class tstep(object):
         self.force_on_mtoc[k,3:] = y_BC[6*k+3 : 6*k+6]
 
 
-    # -------------------------------------------------
-    # COMPUTE VELOCITY ON A GRID
-    # -------------------------------------------------
-    iComputeVelocity = self.iComputeVelocity
-    if iComputeVelocity and np.remainder(self.step_now, self.ncompute_vel) == 0:
-      # Generate the grid
-      grid_points = generateGrid.generate_grid(self.velP,self.velMeasureRad)
-      # Shift the grid points to the center of the body
-      grid_points[:,0] += self.bodies[0].location[0]
-      grid_points[:,1] += self.bodies[0].location[1]
-      grid_points[:,2] += self.bodies[0].location[2]
-
-      grid_points = grid_points.flatten()
-
-      def compute_velocity(x_all, bodies, shell,
-                        trg_bdy_surf, trg_bdy_cent, trg_shell_surf,
-                        normals_blobs, normals_shell,
-                        As_fibers, As_BC, Gfibers, fibers, trg_fib,
-                        fibers_force_operator, xfibers, grid_points, K_bodies = None):
-
-
-        # Extract shell density
-        offset = 0
-        if shell is not None:
-          offset = 3*shell.Nblobs
-          shell_density = np.reshape(x_all[:offset], (shell.Nblobs, 3))
-
-        # Extract body density, velocity and fiber's position and tension from x_all
-        body_densities = np.zeros((offset_bodies[-1],3))
-        body_velocities = np.zeros((2*len(bodies),3))
-        for k, b in enumerate(bodies):
-          istart = offset + 3*offset_bodies[k]+6*k
-          body_densities[offset_bodies[k]:offset_bodies[k+1]] = np.reshape(x_all[istart : istart+3*b.Nblobs], (b.Nblobs,3))
-          istart += 3*b.Nblobs
-          body_velocities[2*k : 2*k+2] = np.reshape(x_all[istart : istart + 6], (2,3))
-
-        fw = np.array([])
-        if fibers:
-          # Fibers' unknowns
-          XT = x_all[offset+offset_bodies[-1]*3 + len(bodies)*6:]
-
-          # Compute implicit fiber forces
-          force_fibers = fibers_force_operator.dot(XT)
-          # Reorder array
-          fw = np.zeros((force_fibers.size // 3, 3))
-          fw[:,0] = force_fibers[flat2mat[:,0]]
-          fw[:,1] = force_fibers[flat2mat[:,1]]
-          fw[:,2] = force_fibers[flat2mat[:,2]]
-
-        # VELOCITY DUE TO BODIES
-        if bodies:
-          # Due to hydrodynamic density
-          vbdy2all = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, grid_points, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
-
-          if np.isnan(vbdy2all).any():
-            print('body to grid has non')
-
-          if fibers:
-            # Torque and force due to fiber-body link
-            body_vel_xt = np.concatenate((body_velocities.flatten(),XT.flatten()), axis=0)
-            y_BC = As_BC.dot(body_vel_xt)
-            force_bodies, torque_bodies = np.zeros((len(bodies),3)), np.zeros((len(bodies),3))
-            for k, b in enumerate(bodies):
-              force_bodies[k,:] = y_BC[6*k : 6*k+3]
-              torque_bodies[k,:] = y_BC[6*k+3 : 6*k+6]
-            # Due to forces and torques
-            vbdy2all_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_points, force_bodies, eta = bodies[0].viscosity_scale*self.eta)
-
-            if np.isnan(vbdy2all_force).any():
-              print('body to grid (oseen) has nan')
-
-            vbdy2all_force += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_points, torque_bodies, eta = bodies[0].viscosity_scale*self.eta)
-            if np.isnan(vbdy2all_force).any():
-              print('body to grid (rotlet) has nan')
-            vbdy2all += vbdy2all_force
-        else:
-          y_BC = np.zeros(len(bodies)*6 + offset_fibers[-1]*4)
-          vbdy2all = np.zeros_like(grid_points)
-
-        # VELOCITY DUE TO FIBERS
-        if fibers:
-          vfib2all = tstep_utils.flow_fibers(fw, trg_fib, grid_points, self.fibers, offset_fibers, self.eta, integration = self.integration ,
-            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
-        else:
-          vfib2all = np.zeros_like(grid_points)
-        if np.isnan(vfib2all).any():
-          print('fiber to grid has nan')
-
-        # VELOCITY DUE TO SHELL
-        if shell is not None:
-          # Shell to body and fiber
-          vshell2all = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, grid_points, normals_shell, shell_density, eta = self.eta)
-        else:
-          vshell2all = np.zeros_like(grid_points)
-
-        if np.isnan(vshell2all).any():
-          print('shell to grid has nan')
-
-        vgrid = vshell2all.reshape((vshell2all.size//3,3)) + vbdy2all.reshape((vbdy2all.size//3, 3)) + vfib2all.reshape((vfib2all.size//3, 3))
-
-        return vgrid
-
-
-
     # ---------------------------------------
     # 5. UPDATE FIBER CONFIGURATION AND BODIES
     # ---------------------------------------
@@ -1397,53 +1318,188 @@ class tstep(object):
           self.write_message('GMRES converged in ' + str(counter2.niter) + ' iterations.')
 
         b.traction = -np.reshape(solTraj,(b.Nblobs,3)) # revert the direction
+    # -------------------------------------------------
+    # COMPUTE VELOCITY ON A GRID
+    # -------------------------------------------------
+    iComputeVelocity = self.iComputeVelocity
+    if iComputeVelocity and np.remainder(self.step_now, self.ncompute_vel) == 0:
+      # Rotate and translate the grid
+      location_old, orientation_old = np.copy(self.bodies[0].location), copy.copy(self.bodies[0].orientation)
+      self.bodies[0].location = np.copy(self.bodies[0].location_new)
+      self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
+      
+      grid_cheb = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cheb, 0)
+      grid_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cube, 0) 
+      
+      self.bodies[0].location = location_old
+      self.bodies[0].orientation = orientation_old
+
+      grid_cheb = grid_cheb.flatten()
+      grid_cube = grid_cube.flatten()
+      
+      def compute_velocity(x_all, bodies, shell,
+                        trg_bdy_surf, trg_bdy_cent, trg_shell_surf,
+                        normals_blobs, normals_shell,
+                        As_fibers, As_BC, Gfibers, fibers, trg_fib,
+                        fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = None):
+
+
+        # Extract shell density
+        offset = 0
+        if shell is not None:
+          offset = 3*shell.Nblobs
+          shell_density = np.reshape(x_all[:offset], (shell.Nblobs, 3))
+
+        # Extract body density, velocity and fiber's position and tension from x_all
+        body_densities = np.zeros((offset_bodies[-1],3))
+        body_velocities = np.zeros((2*len(bodies),3))
+        for k, b in enumerate(bodies):
+          istart = offset + 3*offset_bodies[k]+6*k
+          body_densities[offset_bodies[k]:offset_bodies[k+1]] = np.reshape(x_all[istart : istart+3*b.Nblobs], (b.Nblobs,3))
+          istart += 3*b.Nblobs
+          body_velocities[2*k : 2*k+2] = np.reshape(x_all[istart : istart + 6], (2,3))
+
+        fw = np.array([])
+        if fibers:
+          # Fibers' unknowns
+          XT = x_all[offset+offset_bodies[-1]*3 + len(bodies)*6:]
+
+          # Compute implicit fiber forces
+          force_fibers = fibers_force_operator.dot(XT)
+          # Reorder array
+          fw = np.zeros((force_fibers.size // 3, 3))
+          fw[:,0] = force_fibers[flat2mat[:,0]]
+          fw[:,1] = force_fibers[flat2mat[:,1]]
+          fw[:,2] = force_fibers[flat2mat[:,2]]
+
+        # VELOCITY DUE TO BODIES
+        if bodies:
+          # Due to hydrodynamic density
+          vbdy2cheb = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, grid_cheb, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
+          vbdy2cube = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, grid_cube, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
+          
+          if np.isnan(vbdy2cheb).any() or np.isnan(vbdy2cube).any():
+            print('body to grid has non')
+
+          if fibers:
+            # Torque and force due to fiber-body link
+            body_vel_xt = np.concatenate((body_velocities.flatten(),XT.flatten()), axis=0)
+            y_BC = As_BC.dot(body_vel_xt)
+            force_bodies, torque_bodies = np.zeros((len(bodies),3)), np.zeros((len(bodies),3))
+            for k, b in enumerate(bodies):
+              force_bodies[k,:] = y_BC[6*k : 6*k+3]
+              torque_bodies[k,:] = y_BC[6*k+3 : 6*k+6]
+            # Due to forces and torques
+            vbdy2cube_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cube, force_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            vbdy2cheb_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cheb, force_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            
+            if np.isnan(vbdy2cube_force).any() or np.isnan(vbdy2cheb_force).any():
+              print('body to grid (oseen) has nan')
+              
+
+            vbdy2cheb_force += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cheb, torque_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            vbdy2cube_force += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cube, torque_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            if np.isnan(vbdy2cheb_force).any() or np.isnan(vbdy2cube_force).any():
+              print('body to grid (rotlet) has nan')
+            vbdy2cheb += vbdy2cheb_force
+            vbdy2cube += vbdy2cube_force
+        else:
+          y_BC = np.zeros(len(bodies)*6 + offset_fibers[-1]*4)
+          vbdy2cheb = np.zeros_like(grid_cheb)
+          vbdy2cube = np.zeros_like(grid_cube)
+
+        # VELOCITY DUE TO FIBERS
+        if fibers:
+          vfib2cheb = tstep_utils.flow_fibers(fw, trg_fib, grid_cheb, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
+          vfib2cube = tstep_utils.flow_fibers(fw, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
+        else:
+          vfib2cheb = np.zeros_like(grid_cheb)
+          vfib2cube = np.zeros_like(grid_cube)
+          
+        if np.isnan(vfib2cube).any() or np.isnan(vfib2cheb).any():
+          print('fiber to grid has nan')
+
+        # VELOCITY DUE TO SHELL
+        if shell is not None:
+          # Shell to body and fiber
+          vshell2cheb = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, grid_cheb, normals_shell, shell_density, eta = self.eta)
+          vshell2cube = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, grid_cube, normals_shell, shell_density, eta = self.eta)
+        else:
+          vshell2cube = np.zeros_like(grid_cube)
+          vshell2cheb = np.zeros_like(grid_cheb)
+
+        if np.isnan(vshell2cube).any() or np.isnan(vshell2cheb).any():
+          print('shell to grid has nan')
+
+        vgrid_cube = vshell2cube.reshape((vshell2cube.size//3,3)) + vbdy2cube.reshape((vbdy2cube.size//3, 3)) + vfib2cube.reshape((vfib2cube.size//3, 3))
+        vgrid_cheb = vshell2cheb.reshape((vshell2cheb.size//3,3)) + vbdy2cheb.reshape((vbdy2cheb.size//3, 3)) + vfib2cheb.reshape((vfib2cheb.size//3, 3))
+        return vgrid_cube, vgrid_cheb
+
 
     if iComputeVelocity and np.remainder(self.step_now, self.ncompute_vel) == 0:
-      vgrid = compute_velocity(sol, self.bodies, self.shell,
+      vgrid_cube, vgrid_cheb = compute_velocity(sol, self.bodies, self.shell,
                       trg_bdy_surf, trg_bdy_cent, self.trg_shell_surf,
                       normals_blobs, self.normals_shell,
                       As_fibers, As_BC, Gfibers, self.fibers, trg_fib,
-                      fibers_force_operator, xfibers, grid_points, K_bodies = K_bodies)
+                      fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = K_bodies)
 
       if force_fibers.any():
-        vfib2grid = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_points, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+        vfib2cube = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
             fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
-        vgrid += vfib2grid.reshape((vfib2grid.size//3,3))
+        vfib2cheb = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cheb, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 50
+        vgrid_cube += vfib2cube.reshape((vfib2cube.size//3,3))
+        vgrid_cheb += vfib2cheb.reshape((vfib2cheb.size//3,3))
+        
         self.write_message('There is force_fiber causing vgrid')
 
       if force_bodies.any():
-        vbdy2grid = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_points, force_bodies[:,:3], eta = self.bodies[0].viscosity_scale*self.eta)
-        if np.isnan(vbdy2grid).any():
+        vbdy2cube = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cube, force_bodies[:,:3], eta = self.bodies[0].viscosity_scale*self.eta)
+        vbdy2cheb = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cheb, force_bodies[:,:3], eta = self.bodies[0].viscosity_scale*self.eta)
+        if np.isnan(vbdy2cube).any() or np.isnan(vbdy2cheb).any():
           print('body to grid (external force) has nan')
-        vbdy2grid += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_points, force_bodies[:,3:], eta = self.bodies[0].viscosity_scale*self.eta)
-        if np.isnan(vbdy2grid).any():
+        vbdy2cube += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cube, force_bodies[:,3:], eta = self.bodies[0].viscosity_scale*self.eta)
+        vbdy2cheb += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cheb, force_bodies[:,3:], eta = self.bodies[0].viscosity_scale*self.eta)
+        if np.isnan(vbdy2cheb).any() or np.isnan(vbdy2cube).any():
           print('body to grid (external toruq) has nan')
-        vgrid += vbdy2grid.reshape((vbdy2grid.size//3,3))
-
+        vgrid_cheb += vbdy2cheb.reshape((vbdy2cheb.size//3,3))
+        vgrid_cube += vbdy2cube.reshape((vbdy2cube.size//3,3))
       grid_points = grid_points.reshape((grid_points.size//3,3))
 
       if self.bodies:
         loc = self.bodies[0].location
-        ids = np.sqrt(((grid_points[:,0]-loc[0])/self.body_a)**2 + ((loc[1]-grid_points[:,1])/self.body_b)**2 + ((loc[2]-grid_points[:,2])/self.body_c)**2) <= 1
-        vgrid[ids] = 0
-        vgrid[ids] = self.bodies[0].velocity
+        ids = np.sqrt(((grid_cube[:,0]-loc[0])/self.body_a)**2 + ((loc[1]-grid_cube[:,1])/self.body_b)**2 + ((loc[2]-grid_cube[:,2])/self.body_c)**2) <= 1
+        vgrid_cube[ids] = 0
+        vgrid_cube[ids] = self.bodies[0].velocity
 
-        rgrid = grid_points[ids] - loc
+        rgrid = grid_cube[ids] - loc
         omega_b = self.bodies[0].angular_velocity
-        vgrid[ids,0] += omega_b[1]*rgrid[:,2] - omega_b[2]*rgrid[:,1]
-        vgrid[ids,1] += omega_b[2]*rgrid[:,0] - omega_b[0]*rgrid[:,2]
-        vgrid[ids,2] += omega_b[0]*rgrid[:,1] - omega_b[1]*rgrid[:,0]
+        vgrid_cube[ids,0] += omega_b[1]*rgrid[:,2] - omega_b[2]*rgrid[:,1]
+        vgrid_cube[ids,1] += omega_b[2]*rgrid[:,0] - omega_b[0]*rgrid[:,2]
+        vgrid_cube[ids,2] += omega_b[0]*rgrid[:,1] - omega_b[1]*rgrid[:,0]
 
       # Save velocity and the grid points
       
-      name = self.output_name + 'grid_at_step' + str(self.step_now) + '.txt'
+      name = self.output_name + 'cheb_grid_at_step' + str(self.step_now) + '.txt'
       f_grid = open(name, 'w')
-      np.savetxt(f_grid,grid_points)
+      np.savetxt(f_grid,grid_cheb)
       f_grid.close()
 
-      name = self.output_name + '_velocity_at_step' + str(self.step_now) + '.txt'
+      name = self.output_name + '_cheb_velocity_at_step' + str(self.step_now) + '.txt'
       f_grid_velocity = open(name, 'w')
-      np.savetxt(f_grid_velocity, vgrid)
+      np.savetxt(f_grid_velocity, vgrid_cheb)
+      f_grid_velocity.close()
+      
+      name = self.output_name + 'cube_grid_at_step' + str(self.step_now) + '.txt'
+      f_grid = open(name, 'w')
+      np.savetxt(f_grid,grid_cube)
+      f_grid.close()
+
+      name = self.output_name + '_cube_velocity_at_step' + str(self.step_now) + '.txt'
+      f_grid_velocity = open(name, 'w')
+      np.savetxt(f_grid_velocity, vgrid_cube)
       f_grid_velocity.close()
 
     return # time_step_hydro
