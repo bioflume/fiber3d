@@ -11,6 +11,19 @@ import copy
 import stkfmm
 import os
 
+try:
+  from pyevtk.hl import gridToVTK
+except ImportError:
+  pass
+
+# Try to import the visit_writer (boost implementation)
+try:
+  # import visit.visit_writer as visit_writer
+  from visit import visit_writer as visit_writer
+except ImportError as e:
+  print(e)
+  pass
+
 from scipy.spatial import ConvexHull
 
 # OUR CLASSES
@@ -193,7 +206,14 @@ class tstep(object):
       Ncube = 100
       xg = np.linspace(-Lcube/2,Lcube/2,Ncube)
       [xx, yy, zz] = np.meshgrid(xg,xg,xg,sparse=False,indexing='ij')
-      self.ref_grid_cube = np.concatenate((xx.flatten(), yy.flatten(), zz.flatten()), axis = 1)    
+      self.ref_grid_cube = np.concatenate((xx.flatten(), yy.flatten(), zz.flatten()), axis = 1)   
+      
+      # Edges of the cells should be stored too
+      dx_grid = xg[1]-xg[0]     
+      grid_x = np.arange(Ncube + 1) * dx_grid + - Lcube/2
+      [xx, yy, zz] = np.meshgrid(grid_x,grid_x,grid_x,sparse=False,indexing='ij')
+      self.ref_edges_cube = np.concatenate((xx.flatten(), yy.flatten(), zz.flatten()), axis = 1)
+ 
     
     name = options.output_name + '_ref_cheb_grid.txt'
     with open(name, 'w') as f:
@@ -1329,7 +1349,7 @@ class tstep(object):
       self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
       
       grid_cheb = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cheb, 0)
-      grid_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cube, 0) 
+      grid_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cube, 0)
       
       self.bodies[0].location = location_old
       self.bodies[0].orientation = orientation_old
@@ -1437,8 +1457,6 @@ class tstep(object):
         vgrid_cheb = vshell2cheb.reshape((vshell2cheb.size//3,3)) + vbdy2cheb.reshape((vbdy2cheb.size//3, 3)) + vfib2cheb.reshape((vfib2cheb.size//3, 3))
         return vgrid_cube, vgrid_cheb
 
-
-    if iComputeVelocity and np.remainder(self.step_now, self.ncompute_vel) == 0:
       vgrid_cube, vgrid_cheb = compute_velocity(sol, self.bodies, self.shell,
                       trg_bdy_surf, trg_bdy_cent, self.trg_shell_surf,
                       normals_blobs, self.normals_shell,
@@ -1466,8 +1484,8 @@ class tstep(object):
           print('body to grid (external toruq) has nan')
         vgrid_cheb += vbdy2cheb.reshape((vbdy2cheb.size//3,3))
         vgrid_cube += vbdy2cube.reshape((vbdy2cube.size//3,3))
+      i
       grid_points = grid_points.reshape((grid_points.size//3,3))
-
       if self.bodies:
         loc = self.bodies[0].location
         ids = np.sqrt(((grid_cube[:,0]-loc[0])/self.body_a)**2 + ((loc[1]-grid_cube[:,1])/self.body_b)**2 + ((loc[2]-grid_cube[:,2])/self.body_c)**2) <= 1
@@ -1481,7 +1499,9 @@ class tstep(object):
         vgrid_cube[ids,2] += omega_b[0]*rgrid[:,1] - omega_b[1]*rgrid[:,0]
 
       # Save velocity and the grid points
-      
+      grid_cube = grid_cube.reshape((grid_cube.size//3,3))
+      grid_cheb = grid_cheb.reshape((grid_cheb.size//3,3))
+       
       name = self.output_name + 'cheb_grid_at_step' + str(self.step_now) + '.txt'
       f_grid = open(name, 'w')
       np.savetxt(f_grid,grid_cheb)
@@ -1501,7 +1521,31 @@ class tstep(object):
       f_grid_velocity = open(name, 'w')
       np.savetxt(f_grid_velocity, vgrid_cube)
       f_grid_velocity.close()
+      
+      # Prepara data for VTK writer 
+      variables = [np.reshape(vgrid_cube, vgrid_cube.size)] 
+      num_points = grid_cube.size//3 
+      dims = np.array([num_points+1, num_points+1, num_points+1], dtype=np.int32) 
+      nvars = 1
+      vardims = np.array([3])
+      centering = np.array([0])
+      varnames = ['velocity\0']
+      name = self.output_name + '_onCube_atStep' + str(self.step_now) + '.velocity_field.vtk'
+      edges_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_edges_cube, 0)  
 
+      # Write velocity field
+      visit_writer.boost_write_rectilinear_mesh(name,      # File's name
+                                                0,         # 0=ASCII,  1=Binary
+                                                dims,      # {mx, my, mz}
+                                                edges_cube[:,0],     # xmesh
+                                                edges_cube[:,1],     # ymesh
+                                                edges_cube[:,2],     # zmesh
+                                                nvars,     # Number of variables
+                                                vardims,   # Size of each variable, 1=scalar, velocity=3*scalars
+                                                centering, # Write to cell centers of corners
+                                                varnames,  # Variables' names
+                                                variables) # Variables
+  
     return # time_step_hydro
 
   ##############################################################################################
