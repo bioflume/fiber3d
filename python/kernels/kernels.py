@@ -22,10 +22,10 @@ except ImportError:
   found_pycuda = False
 
 # Try to import stkfmm library
-try:
-  import stkfmm 
-except ImportError:
-  pass
+#try:
+#  import stkfmm 
+#except ImportError:
+#  pass
 
 
 def oseen_tensor(r_vectors, eta = 1.0, reg = 5e-3, epsilon_distance = 1e-5, input_format = 'r'):

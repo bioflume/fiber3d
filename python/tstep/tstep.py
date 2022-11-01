@@ -1,5 +1,4 @@
 from __future__ import division, print_function
-from multi.translate_rotate_grid import get_vectors_frame_body
 import numpy as np
 from functools import partial
 import scipy.linalg as scla
@@ -8,7 +7,7 @@ import scipy.sparse.linalg as scspla
 import sys
 import time
 import copy
-import stkfmm
+#import stkfmm
 import os
 
 try:
@@ -1467,7 +1466,7 @@ class tstep(object):
         vfib2cube = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
             fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
         vfib2cheb = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cheb, self.fibers, offset_fibers, self.eta, integration = self.integration ,
-            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 50
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
         vgrid_cube += vfib2cube.reshape((vfib2cube.size//3,3))
         vgrid_cheb += vfib2cheb.reshape((vfib2cheb.size//3,3))
         
@@ -1484,7 +1483,7 @@ class tstep(object):
           print('body to grid (external toruq) has nan')
         vgrid_cheb += vbdy2cheb.reshape((vbdy2cheb.size//3,3))
         vgrid_cube += vbdy2cube.reshape((vbdy2cube.size//3,3))
-      i
+      
       grid_points = grid_points.reshape((grid_points.size//3,3))
       if self.bodies:
         loc = self.bodies[0].location
