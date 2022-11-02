@@ -2,6 +2,15 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.logFile
+*.randomState
+*.random_state
+*.clones
+*.info
+*.fibers
+*.asv
+*.txt
+*.zip
 
 # C extensions
 *.so
