@@ -29,10 +29,10 @@ ref_cube_grid_file = 'run_ref_cube_grid.txt';
 
 % importdata
 A = importdata(time_system_info_file,' ',0);
-dts = A(:,1); time = A(:,2); naccept = ceil(A(end,3))+1; nreject = ceil(A(end,4));
+dts = A(:,1); time = A(:,2); naccept = ceil(A(end,3)); nreject = ceil(A(end,4));
 A_fiber = importdata(fiber_file,' ',0);
 A_body = importdata(body_file,' ',0);
-ntimes = floor((naccept-1)/n_save)+1; ntimes = 18;
+ntimes = ceil(naccept/n_save); 
 A_body_vel = importdata(body_vel, ' ', 0);
 
 
@@ -41,9 +41,9 @@ offset = 1; offset_body = 1;
 nfibers = A_fiber(offset,1);
 Nfib = ceil(A_fiber(offset+1,1));
 Lfib = zeros(nfibers,1);
-xfib = zeros(Nfib,nfibers,ntimes);
-yfib = zeros(Nfib,nfibers,ntimes);
-zfib = zeros(Nfib,nfibers,ntimes);
+xfib = zeros(Nfib,nfibers,ntimes); xfib0 = zeros(Nfib,nfibers);
+yfib = zeros(Nfib,nfibers,ntimes); yfib0 = zeros(Nfib,nfibers);
+zfib = zeros(Nfib,nfibers,ntimes); zfib0 = zeros(Nfib,nfibers);
 for ifib = 1 : nfibers 
   Lfib(ifib,1) = A_fiber(offset+1,3); 
 end
@@ -54,10 +54,10 @@ body_ra = A_body(offset_body+1,1);
 body_rb = A_body(offset_body+1,2);
 body_rc = A_body(offset_body+1,3);
 
-xc_body = zeros(nbodies,ntimes);
-yc_body = zeros(nbodies,ntimes);
-zc_body = zeros(nbodies,ntimes);
-quat_body = zeros(4,nbodies,ntimes);
+xc_body = zeros(nbodies,ntimes); xc0_body = zeros(nbodies,1);
+yc_body = zeros(nbodies,ntimes); yc0_body = zeros(nbodies,1);
+zc_body = zeros(nbodies,ntimes); zc0_body = zeros(nbodies,1);
+quat_body = zeros(4,nbodies,ntimes); quat0_body = zeros(4,nbodies);
 
 % translational velocity
 uc_body = A_body_vel(2:2:end,1); vc_body = A_body_vel(2:2:end,2); wc_body = A_body_vel(2:2:end,3);
@@ -65,6 +65,27 @@ uc_body = A_body_vel(2:2:end,1); vc_body = A_body_vel(2:2:end,2); wc_body = A_bo
 ua_body = A_body_vel(2:2:end,4); va_body = A_body_vel(2:2:end,5); wa_body = A_body_vel(2:2:end,6);
 
 % Loop over time steps
+% Save the initial configurations
+% fibers
+for ifib = 1 : nfibers
+    
+  xfib0(:,ifib) = A_fiber(offset+2:offset+2+Nfib-1,1);
+  yfib0(:,ifib) = A_fiber(offset+2:offset+2+Nfib-1,2);
+  zfib0(:,ifib) = A_fiber(offset+2:offset+2+Nfib-1,3);
+
+  offset = offset + Nfib + 2;
+end
+offset = offset + 1;
+% Bodies
+for ib = 1 : nbodies
+  xc0_body(ib) = A_body(offset_body+2,1);
+  yc0_body(ib) = A_body(offset_body+2,2);
+  zc0_body(ib) = A_body(offset_body+2,3);
+  quat0_body(:,ib) = A_body(offset_body+2,4:7);
+  offset_body = offset_body + 2;
+end
+offset_body = offset_body + 1;
+
 for k = 1 : ntimes
   % Fibers 
   for ifib = 1 : nfibers
