@@ -205,6 +205,9 @@ class set_parameters(object):
                passive_sites_idcs_file = None,
                occupied_sites_idcs_file = None,
                fib_sites_lengths_file = None,
+               resume_from_time = None,
+               resume_fiber_file = None,
+               resume_body_file = None,
                scale_life_time = 0.5,
                scale_vg = 0.75,
                resume_from_step = None,
@@ -216,7 +219,8 @@ class set_parameters(object):
                cent_location = None,
                body_viscosity_scale = None,
                body_cent_location = np.array([0, 0, 0]),
-               fiber_length = None):
+               fiber_length = None,
+               body_link_location_file = None):
     # FLOW PARAMETERS
     self.viscosity = viscosity # new fluid viscosity parameter
     self.eta = eta # fluid viscosity
@@ -279,6 +283,10 @@ class set_parameters(object):
     self.fiber_length = fiber_length
     self.velMeasureRad = velMeasureRad
     self.velMeasureP = velMeasureP
+    self.resume_from_time = resume_from_time
+    self.resume_fiber_file = resume_fiber_file
+    self.resume_body_file = resume_body_file
+    self.body_link_location_file = body_link_location_file
 
 def initialize_from_file(input_file,options,prams):
   '''
@@ -334,189 +342,235 @@ def initialize_from_file(input_file,options,prams):
 
   # Create a rigid body
   struct_ref_config = np.array([0, 0, 0])
-  orientation = [1, 0, 0, 0]
-  norm_orientation = np.linalg.norm(orientation)
-  struct_orientation = quaternion.Quaternion(orientation / norm_orientation)
+  if prams.resume_body_file is None:
+    orientation = [1, 0, 0, 0]
+    norm_orientation = np.linalg.norm(orientation)
+    struct_orientation = quaternion.Quaternion(orientation / norm_orientation)
 
-  b = body.Body(prams.body_cent_location, struct_orientation, struct_ref_config, struct_ref_config, np.ones(struct_ref_config.size // 3))
+    b = body.Body(prams.body_cent_location, struct_orientation, struct_ref_config, struct_ref_config, np.ones(struct_ref_config.size // 3))
+  else:
+    num_bodies_struct, struct_locations, struct_orientations = read_clones_file.read_clones_file(prams.resume_body_file)
+    for i in range(num_bodies_struct):
+      b = body.Body(struct_locations[i], struct_orientations[i],struct_ref_config, struct_ref_config, np.ones(struct_ref_config.size // 3))
+
   bodies_types.append(1)
   bodies_names.append('body')
   body_r, body_a, body_b, body_c = prams.body_r, prams.body_a, prams.body_b, prams.body_c
   b.ID = 'body'
   bodies.append(b)
   
-  s = np.linspace(0, 2, options.num_points)
-  if prams.fiber_position is not None: # the position array is with respect to center of body
-    links_location = np.array([])
-    for idx, ilink in enumerate(prams.fiber_position):
-      axis_s = np.empty((s.size,3))
-      if prams.body_shape is 'sphere':
-        normal = ilink / np.linalg.norm(ilink)
-      elif prams.body_shape is 'ellipsoid':
-        normal = np.zeros_like(ilink)
-        normal[0] = 2*ilink[0]/(prams.body_a**2)
-        normal[1] = 2*ilink[1]/(prams.body_b**2)
-        normal[2] = 2*ilink[2]/(prams.body_c**2)
-        normal = normal/np.linalg.norm(normal)
-      axis_s[:,0] = normal[0] * s
-      axis_s[:,1] = normal[1] * s
-      axis_s[:,2] = normal[2] * s
-      axis_s = axis_s * prams.fiber_length / 2 + ilink + prams.body_cent_location
+  if prams.body_link_location_file is not None:
+    bodies[0].nuc_sites = np.loadtxt(prams.body_link_location_file, dtype = np.float64)
+    
+  
+  if prams.resume_fiber_file is None:
+    s = np.linspace(0, 2, options.num_points)
+    if prams.fiber_position is not None: # the position array is with respect to center of body
+      links_location = np.array([])
+      for idx, ilink in enumerate(prams.fiber_position):
+        axis_s = np.empty((s.size,3))
+        if prams.body_shape is 'sphere':
+          normal = ilink / np.linalg.norm(ilink)
+        elif prams.body_shape is 'ellipsoid':
+          normal = np.zeros_like(ilink)
+          normal[0] = 2*ilink[0]/(prams.body_a**2)
+          normal[1] = 2*ilink[1]/(prams.body_b**2)
+          normal[2] = 2*ilink[2]/(prams.body_c**2)
+          normal = normal/np.linalg.norm(normal)
+        axis_s[:,0] = normal[0] * s
+        axis_s[:,1] = normal[1] * s
+        axis_s[:,2] = normal[2] * s
+        axis_s = axis_s * prams.fiber_length / 2 + ilink + prams.body_cent_location
 
-      if links_location.any():
-        links_location = np.concatenate((links_location,np.reshape(ilink,(1,3))),axis=0)
-      else:
-        links_location = np.reshape(ilink,(1,3))
-
-
-      fib = fiber.fiber(num_points = options.num_points,
-                        num_points_max = options.num_points_max,
-                        num_points_finite_diff = options.num_points_finite_diff,
-                        dt = options.dt,
-                        E = prams.Efib,
-                        length = prams.fiber_length,
-                        adaptive_num_points = options.adaptive_num_points,
-                        viscosity = prams.eta)
-      fib.ID = 'fibers'
-      fib.x = axis_s
-      fib.nuc_site_idx = int(idx)
-      fib.attached_to_body = 0
-      fibers.append(fib)
-
-    bodies[0].nuc_sites = links_location
-  elif prams.num_fibers is not None:
-    # Then generate the nucleating sites given the body parameters
-    min_ds, Ncreated = 0.1, 0
-    xyz_sites = np.array([])
-    if prams.body_shape is 'sphere':
-      while Ncreated < prams.num_fibers:
-        xq2 = body_r**2 * np.random.randn()
-        yq2 = body_r**2 * np.random.randn()
-        zq2 = body_r**2 * np.random.randn()
-
-        # Project it onto the surface
-        d = np.sqrt(xq2**2 / body_r**2 + yq2**2 / body_r**2 + zq2**2 / body_r**2)
-        xq = xq2 / d
-        yq = yq2 / d
-        zq = zq2 / d
-        ilink = np.array([xq, yq, zq])
-
-        iPlace = False
-        if Ncreated == 0:
-          xyz_sites = np.reshape(ilink, (1,3))
-          Ncreated += 1
-          iPlace = True
+        if links_location.any():
+          links_location = np.concatenate((links_location,np.reshape(ilink,(1,3))),axis=0)
         else:
-          dummy = np.concatenate((xyz_sites, np.reshape(ilink, (1,3))), axis = 0)
+          links_location = np.reshape(ilink,(1,3))
+
+
+        fib = fiber.fiber(num_points = options.num_points,
+                          num_points_max = options.num_points_max,
+                          num_points_finite_diff = options.num_points_finite_diff,
+                          dt = options.dt,
+                          E = prams.Efib,
+                          length = prams.fiber_length,
+                          adaptive_num_points = options.adaptive_num_points,
+                          viscosity = prams.eta)
+        fib.ID = 'fibers'
+        fib.x = axis_s
+        fib.nuc_site_idx = int(idx)
+        fib.attached_to_body = 0
+        fibers.append(fib)
+
+      bodies[0].nuc_sites = links_location
+      name = options.output_name + '_links_location.txt'
+      fId = open(name,'wb')
+      np.savetxt(fId,links_location)
+      fId.close()
+      
+    elif prams.num_fibers is not None:
+      # Then generate the nucleating sites given the body parameters
+      min_ds, Ncreated = 0.1, 0
+      xyz_sites = np.array([])
+      if prams.body_shape is 'sphere':
+        while Ncreated < prams.num_fibers:
+          xq2 = body_r**2 * np.random.randn()
+          yq2 = body_r**2 * np.random.randn()
+          zq2 = body_r**2 * np.random.randn()
+
+          # Project it onto the surface
+          d = np.sqrt(xq2**2 / body_r**2 + yq2**2 / body_r**2 + zq2**2 / body_r**2)
+          xq = xq2 / d
+          yq = yq2 / d
+          zq = zq2 / d
+          ilink = np.array([xq, yq, zq])
+
+          iPlace = False
+          if Ncreated == 0:
+            xyz_sites = np.reshape(ilink, (1,3))
+            Ncreated += 1
+            iPlace = True
+          else:
+            dummy = np.concatenate((xyz_sites, np.reshape(ilink, (1,3))), axis = 0)
+            dx = dummy[:,0] - dummy[:,0,None]
+            dy = dummy[:,1] - dummy[:,1,None]
+            dz = dummy[:,2] - dummy[:,2,None]
+            dr = np.sqrt(dx**2 + dy**2 + dz**2)
+            dfilament = min(dr[0,1:])
+            if dfilament >= min_ds:
+              xyz_sites = np.copy(dummy)
+              Ncreated += 1
+              iPlace = True
+        
+          if iPlace: # then put the fiber there
+            axis_s = np.empty((s.size,3))
+            normal = -ilink / np.linalg.norm(ilink)
+            axis_s[:,0] = normal[0] * s
+            axis_s[:,1] = normal[1] * s
+            axis_s[:,2] = normal[2] * s
+            axis_s = axis_s * prams.fiber_length / 2 + ilink + prams.body_cent_location
+
+            fib = fiber.fiber(num_points = options.num_points,
+                          num_points_max = options.num_points_max,
+                          num_points_finite_diff = options.num_points_finite_diff,
+                          dt = options.dt,
+                          E = prams.Efib,
+                          length = prams.fiber_length,
+                          adaptive_num_points = options.adaptive_num_points,
+                          viscosity = prams.eta)
+            fib.ID = 'fibers'
+            fib.x = axis_s
+            fib.nuc_site_idx = int(Ncreated-1)
+            fib.attached_to_body = 0
+            fibers.append(fib)
+        bodies[0].nuc_sites = xyz_sites
+        name = options.output_name + '_links_location.txt'
+        fId = open(name,'wb')
+        np.savetxt(fId,xyz_sites)
+        fId.close() 
+      elif prams.body_shape is 'ellipsoid': 
+        def ellipsoid(t, u, a=body_a, b=body_b, c=body_c):
+          return np.array([a*np.sin(u)*np.cos(t), b*np.sin(u)*np.sin(t), c*np.cos(u)]) 
+        t, u = np.meshgrid(np.linspace(0, 2*np.pi, 25), np.linspace(0, np.pi, 25))
+        coords = ellipsoid(t, u)
+        # Surface cumulator
+        delta_t_temp = np.diff(coords, axis=2)
+        delta_u_temp = np.diff(coords, axis=1)
+
+        delta_t = np.zeros(coords.shape)
+        delta_u = np.zeros(coords.shape)
+
+        delta_t[:coords.shape[0], :coords.shape[1], 1:coords.shape[2]] = delta_t_temp
+        delta_u[:coords.shape[0], 1:coords.shape[1], :coords.shape[2]] = delta_u_temp
+
+        delta_S = np.linalg.norm(np.cross(delta_t, delta_u, 0, 0), axis=2)
+
+        cum_S_t = np.cumsum(delta_S.sum(axis=0))
+        cum_S_u = np.cumsum(delta_S.sum(axis=1))
+
+        # r_surface_from_data
+        rand_S_t = np.random.rand(5*prams.num_fibers) * cum_S_t[-1]
+        rand_S_u = np.random.rand(5*prams.num_fibers) * cum_S_u[-1]
+        rand_t = interp1d(cum_S_t, t[0, :])(rand_S_t)
+        rand_u = interp1d(cum_S_u, u[:, 0])(rand_S_u)
+
+        rand_coords = ellipsoid(rand_t, rand_u)
+        rand_coords = rand_coords.transpose()
+        links_location = np.reshape(rand_coords[0],(1,3))
+        Ncreated = 1
+
+        for idx in np.arange(1,5*prams.num_fibers):  
+          x = np.reshape(rand_coords[idx],(1,3))
+          dummy = np.concatenate((links_location,x),axis = 0)
           dx = dummy[:,0] - dummy[:,0,None]
           dy = dummy[:,1] - dummy[:,1,None]
           dz = dummy[:,2] - dummy[:,2,None]
+
           dr = np.sqrt(dx**2 + dy**2 + dz**2)
           dfilament = min(dr[0,1:])
-          if dfilament >= min_ds:
-            xyz_sites = np.copy(dummy)
+          if dfilament > min_ds:
+            links_location = np.copy(dummy)
             Ncreated += 1
-            iPlace = True
-        
-        if iPlace: # then put the fiber there
+            if Ncreated == prams.num_fibers: break
+      
+        isite = 0  
+        for ilink in links_location:
           axis_s = np.empty((s.size,3))
-          normal = -ilink / np.linalg.norm(ilink)
+          normal = np.copy(ilink)
+          normal[0] *= 2/body_a**2
+          normal[1] *= 2/body_b**2
+          normal[2] *= 2/body_c**2
+          normal = normal / np.linalg.norm(normal)
           axis_s[:,0] = normal[0] * s
           axis_s[:,1] = normal[1] * s
           axis_s[:,2] = normal[2] * s
           axis_s = axis_s * prams.fiber_length / 2 + ilink + prams.body_cent_location
 
           fib = fiber.fiber(num_points = options.num_points,
-                        num_points_max = options.num_points_max,
-                        num_points_finite_diff = options.num_points_finite_diff,
-                        dt = options.dt,
-                        E = prams.Efib,
-                        length = prams.fiber_length,
-                        adaptive_num_points = options.adaptive_num_points,
-                        viscosity = prams.eta)
+                          num_points_max = options.num_points_max,
+                          num_points_finite_diff = options.num_points_finite_diff,
+                          dt = options.dt,
+                          E = prams.Efib,
+                          length = prams.fiber_length,
+                          adaptive_num_points = options.adaptive_num_points,
+                          viscosity = prams.eta)
           fib.ID = 'fibers'
           fib.x = axis_s
-          fib.nuc_site_idx = int(Ncreated-1)
+          fib.nuc_site_idx = int(isite)
           fib.attached_to_body = 0
           fibers.append(fib)
-
+          isite += 1
+    
+      bodies[0].nuc_sites = links_location
+      name = options.output_name + '_links_location.txt'
+      fId = open(name,'wb')
+      np.savetxt(fId,links_location)
+      fId.close()
+    else:
+      fibers_info, fibers_coor = read_fibers_file.read_fibers_file(prams.resume_fiber_file)
+      # Create each fiber structure of type structure 
+      offset = 0
+      for i in range(len(fibers_info)):
+        num_points = options.num_points
+        length = prams.fiber_length
+        if len(fibers_info[i])> 0: num_points = fibers_info[i][0]
+        if len(fibers_info[i])> 2: length = fibers_info[i][2] 
         
-    elif prams.body_shape is 'ellipsoid': 
-      def ellipsoid(t, u, a=body_a, b=body_b, c=body_c):
-        return np.array([a*np.sin(u)*np.cos(t), b*np.sin(u)*np.sin(t), c*np.cos(u)]) 
-      t, u = np.meshgrid(np.linspace(0, 2*np.pi, 25), np.linspace(0, np.pi, 25))
-      coords = ellipsoid(t, u)
-      # Surface cumulator
-      delta_t_temp = np.diff(coords, axis=2)
-      delta_u_temp = np.diff(coords, axis=1)
-
-      delta_t = np.zeros(coords.shape)
-      delta_u = np.zeros(coords.shape)
-
-      delta_t[:coords.shape[0], :coords.shape[1], 1:coords.shape[2]] = delta_t_temp
-      delta_u[:coords.shape[0], 1:coords.shape[1], :coords.shape[2]] = delta_u_temp
-
-      delta_S = np.linalg.norm(np.cross(delta_t, delta_u, 0, 0), axis=2)
-
-      cum_S_t = np.cumsum(delta_S.sum(axis=0))
-      cum_S_u = np.cumsum(delta_S.sum(axis=1))
-
-      # r_surface_from_data
-      rand_S_t = np.random.rand(5*prams.num_fibers) * cum_S_t[-1]
-      rand_S_u = np.random.rand(5*prams.num_fibers) * cum_S_u[-1]
-      rand_t = interp1d(cum_S_t, t[0, :])(rand_S_t)
-      rand_u = interp1d(cum_S_u, u[:, 0])(rand_S_u)
-
-      rand_coords = ellipsoid(rand_t, rand_u)
-      rand_coords = rand_coords.transpose()
-      links_location = np.reshape(rand_coords[0],(1,3))
-      Ncreated = 1
-
-      for idx in np.arange(1,5*prams.num_fibers):  
-        x = np.reshape(rand_coords[idx],(1,3))
-        dummy = np.concatenate((links_location,x),axis = 0)
-        dx = dummy[:,0] - dummy[:,0,None]
-        dy = dummy[:,1] - dummy[:,1,None]
-        dz = dummy[:,2] - dummy[:,2,None]
-
-        dr = np.sqrt(dx**2 + dy**2 + dz**2)
-        dfilament = min(dr[0,1:])
-        if dfilament > min_ds:
-          links_location = np.copy(dummy)
-          Ncreated += 1
-          if Ncreated == prams.num_fibers: break
-      
-      isite = 0  
-      for ilink in links_location:
-        axis_s = np.empty((s.size,3))
-        normal = np.copy(ilink)
-        normal[0] *= 2/body_a**2
-        normal[1] *= 2/body_b**2
-        normal[2] *= 2/body_c**2
-        normal = normal / np.linalg.norm(normal)
-        axis_s[:,0] = normal[0] * s
-        axis_s[:,1] = normal[1] * s
-        axis_s[:,2] = normal[2] * s
-        axis_s = axis_s * prams.fiber_length / 2 + ilink + prams.body_cent_location
-
-        fib = fiber.fiber(num_points = options.num_points,
-                        num_points_max = options.num_points_max,
-                        num_points_finite_diff = options.num_points_finite_diff,
-                        dt = options.dt,
-                        E = prams.Efib,
-                        length = prams.fiber_length,
-                        adaptive_num_points = options.adaptive_num_points,
-                        viscosity = prams.eta)
+        fib_x = fibers_coor[offset : offset + num_points]
+        fib = fiber.fiber(num_points = num_points,
+                          num_points_max = options.num_points_max,
+                          num_points_finite_diff = options.num_points_finite_diff,
+                          dt = options.dt,
+                          E = prams.Efib,
+                          length = length,
+                          adaptive_num_points = options.adaptive_num_points,
+                          viscosity = prams.eta)
         fib.ID = 'fibers'
-        fib.x = axis_s
-        fib.nuc_site_idx = int(isite)
+        fib.x = fib_x
+        fib.nuc_site_idx = int(i)
         fib.attached_to_body = 0
         fibers.append(fib)
-        isite += 1
-    
-    bodies[0].nuc_sites = links_location
-                 
-  
+        
   # Set some more variables
   fibers_names.append('fibers')
   fibers_types.append(len(fibers))

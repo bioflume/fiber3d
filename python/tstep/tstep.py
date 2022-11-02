@@ -137,6 +137,7 @@ class tstep(object):
     self.save_file = options.save_file
     self.dynInstability = options.dynInstability
     self.resume_from_step = prams.resume_from_step
+    self.resume_from_time = prams.resume_from_time
     self.site_idcs_dying = []
     self.site_idcs_nucleating = []
     self.site_idcs_hinged = []
@@ -850,7 +851,9 @@ class tstep(object):
       xyz = self.bodies[0].nuc_sites[fib.nuc_site_idx]
       rfib = np.sqrt(xyz[0]**2 + xyz[1]**2 + xyz[2]**2)
       nu = np.arccos(xyz[2]/rfib)
-      waveSpeed = self.clamp_oscil_mag * self.clamp_oscil_speed*np.sin(self.clamp_oscil_k*nu-self.clamp_oscil_speed*self.time_now)
+      time_now = self.time_now
+      if self.resume_from_time is not None: time_now += self.resume_from_time
+      waveSpeed = self.clamp_oscil_mag * self.clamp_oscil_speed*np.sin(self.clamp_oscil_k*nu-self.clamp_oscil_speed*time_now)
       
       nvec = np.zeros_like(xyz)
       nvec[0] = 2*xyz[0]/self.body_a**2

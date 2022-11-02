@@ -24,8 +24,18 @@ if __name__ == '__main__':
   #fiber_position.append([0.0,0.0,4.0])
   #fiber_position.append([0.0,0.0,-4.0])
   fiber_length = 1
-
-  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test1/run'
+  
+  # IF RESUMING, otherwise NONE
+  save_folder = '/work2/03353/gokberk/frontera/flagellaRuns/test1/'
+  resume_fiber_file = save_folder + 'run_fibers_resume.fibers'
+  resume_body_file = save_folder + 'run_body_resume.clones'
+  resume_time_file = save_folder + 'run_time_system_size.txt'
+  body_link_location_file = save_folder + '_links_location.txt'
+  
+  info = np.loadtxt(resume_time_file, dtype = np.float64)
+  resume_from_time = info[-1,1]
+  
+  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test1_resume/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
   ncompute_vel = 450
@@ -88,7 +98,11 @@ if __name__ == '__main__':
       clamp_oscil_mag = clamp_oscil_mag,
       clamp_oscil_k = clamp_oscil_k,
       clamp_oscil_speed = clamp_oscil_speed,
-      velMeasureRad = velMeasureRad)
+      velMeasureRad = velMeasureRad,
+      resume_from_time = resume_from_time,
+      resume_fiber_file = resume_fiber_file,
+      resume_body_file = resume_body_file,
+      body_link_location_file = body_link_location_file)
 
   # Create time stepping scheme
   tstep = tstep.tstep(prams,options,None,None,None,None)
