@@ -25,7 +25,7 @@ if __name__ == '__main__':
   #fiber_position.append([0.0,0.0,-4.0])
   fiber_length = 1
 
-  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test1/'
+  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test1/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
   ncompute_vel = 450

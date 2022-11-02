@@ -205,13 +205,25 @@ class tstep(object):
       Ncube = 100
       xg = np.linspace(-Lcube/2,Lcube/2,Ncube)
       [xx, yy, zz] = np.meshgrid(xg,xg,xg,sparse=False,indexing='ij')
-      self.ref_grid_cube = np.concatenate((xx.flatten(), yy.flatten(), zz.flatten()), axis = 1)   
+      xx = xx.flatten()
+      yy = yy.flatten()
+      zz = zz.flatten()
+      xx = xx.reshape((xx.size,1))
+      yy = yy.reshape((yy.size,1))
+      zz = zz.reshape((zz.size,1))
+      self.ref_grid_cube = np.concatenate((xx, yy, zz), axis = 1)   
       
       # Edges of the cells should be stored too
       dx_grid = xg[1]-xg[0]     
       grid_x = np.arange(Ncube + 1) * dx_grid + - Lcube/2
       [xx, yy, zz] = np.meshgrid(grid_x,grid_x,grid_x,sparse=False,indexing='ij')
-      self.ref_edges_cube = np.concatenate((xx.flatten(), yy.flatten(), zz.flatten()), axis = 1)
+      xx = xx.flatten()
+      yy = yy.flatten()
+      zz = zz.flatten()
+      xx = xx.reshape((xx.size,1))
+      yy = yy.reshape((yy.size,1))
+      zz = zz.reshape((zz.size,1))
+      self.ref_edges_cube = np.concatenate((xx, yy, zz), axis = 1)
  
     
     name = options.output_name + '_ref_cheb_grid.txt'
@@ -1231,96 +1243,97 @@ class tstep(object):
 
     # 3.7. Traction mat-vec
     timer.timer('Build_A')
-    def A_traction(xin, body):
-      # for each point, x, y, z components of the traction
-      traction = np.reshape(xin,(body.Nblobs,3)) 
+    if False:
+      def A_traction(xin, body):
+        # for each point, x, y, z components of the traction
+        traction = np.reshape(xin,(body.Nblobs,3)) 
       
-      centxyz = body.location
+        centxyz = body.location
       
-      weights = body.quadrature_weights
-      normals = body.get_normals()
-      surface_xyz = body.get_r_vectors_surface()
+        weights = body.quadrature_weights
+        normals = body.get_normals()
+        surface_xyz = body.get_r_vectors_surface()
 
-      # Extract body density, velocity and fiber's position and tension from x_all
-      traction2 = np.zeros_like(traction) # residual
+        # Extract body density, velocity and fiber's position and tension from x_all
+        traction2 = np.zeros_like(traction) # residual
 
-      for xn in range(body.Nblobs):
-        for yn in range(body.Nblobs):
-          if xn != yn:
-            S = np.zeros((3,3,3)) # j, k, i
-            drxyz = np.zeros(3)
-            drxyz[0] = surface_xyz[yn,0] - surface_xyz[xn,0]
-            drxyz[1] = surface_xyz[yn,1] - surface_xyz[xn,1]
-            drxyz[2] = surface_xyz[yn,2] - surface_xyz[xn,2]
-            dr = np.sqrt(drxyz[0]**2 + drxyz[1]**2 + drxyz[2]**2)
-            # Stresslet contribution to the traction
-            fr = 3.0 / (4.0 * np.pi * self.eta * np.sqrt(dr**2 + 25E-6)**5)
-            rfy = np.dot(drxyz,traction[yn,:])
-            rnx = np.dot(drxyz,normals[xn,:])
-            rny = np.dot(drxyz,normals[yn,:])
-            rfx = np.dot(drxyz,traction[xn,:])
+        for xn in range(body.Nblobs):
+          for yn in range(body.Nblobs):
+            if xn != yn:
+              S = np.zeros((3,3,3)) # j, k, i
+              drxyz = np.zeros(3)
+              drxyz[0] = surface_xyz[yn,0] - surface_xyz[xn,0]
+              drxyz[1] = surface_xyz[yn,1] - surface_xyz[xn,1]
+              drxyz[2] = surface_xyz[yn,2] - surface_xyz[xn,2]
+              dr = np.sqrt(drxyz[0]**2 + drxyz[1]**2 + drxyz[2]**2)
+              # Stresslet contribution to the traction
+              fr = 3.0 / (4.0 * np.pi * self.eta * np.sqrt(dr**2 + 25E-6)**5)
+              rfy = np.dot(drxyz,traction[yn,:])
+              rnx = np.dot(drxyz,normals[xn,:])
+              rny = np.dot(drxyz,normals[yn,:])
+              rfx = np.dot(drxyz,traction[xn,:])
 
-            traction2[xn,:] += weights[yn]*fr*drxyz*(rfy*rnx+rny*rfx)
+              traction2[xn,:] += weights[yn]*fr*drxyz*(rfy*rnx+rny*rfx)
             
-          # Stokeslet contribution to the traction
-          drxyz_G = np.zeros(3)
-          drxyz_G[0] = surface_xyz[yn,0]-centxyz[0]
-          drxyz_G[1] = surface_xyz[yn,1]-centxyz[1]
-          drxyz_G[2] = surface_xyz[yn,2]-centxyz[2]
-          dr_G = np.sqrt(drxyz_G[0]**2 + drxyz_G[1]**2 + drxyz_G[2]**2)
-          fr = 1.0 / (8.0 * np.pi * self.eta * np.sqrt(dr_G**2 + 25E-6))
-          gr = 1.0 / (8.0 * np.pi * self.eta * np.sqrt(dr_G**2 + 25E-6)**3)
-          rfy = np.dot(drxyz_G,traction[yn,:])
-          traction2[xn,:] += (fr*traction[yn,:] + gr*drxyz_G*rfy)*weights[yn]
+            # Stokeslet contribution to the traction
+            drxyz_G = np.zeros(3)
+            drxyz_G[0] = surface_xyz[yn,0]-centxyz[0]
+            drxyz_G[1] = surface_xyz[yn,1]-centxyz[1]
+            drxyz_G[2] = surface_xyz[yn,2]-centxyz[2]
+            dr_G = np.sqrt(drxyz_G[0]**2 + drxyz_G[1]**2 + drxyz_G[2]**2)
+            fr = 1.0 / (8.0 * np.pi * self.eta * np.sqrt(dr_G**2 + 25E-6))
+            gr = 1.0 / (8.0 * np.pi * self.eta * np.sqrt(dr_G**2 + 25E-6)**3)
+            rfy = np.dot(drxyz_G,traction[yn,:])
+            traction2[xn,:] += (fr*traction[yn,:] + gr*drxyz_G*rfy)*weights[yn]
 
-          # Rotlet contribution
-          rot = np.zeros(3)
+            # Rotlet contribution
+            rot = np.zeros(3)
+            drxyz_R = np.zeros(3)
+            drxyz_R[0] = surface_xyz[xn,0]-centxyz[0]
+            drxyz_R[1] = surface_xyz[xn,1]-centxyz[1]
+            drxyz_R[2] = surface_xyz[xn,2]-centxyz[2]
+          
+            hr = -1.0 / (8.0 * np.pi * self.eta * np.sqrt(dr_G**2 + 25E-6)**3)
+
+            rot[0] = (traction[yn,1]*drxyz_G[2]-traction[yn,2]*drxyz_G[1])
+            rot[1] = (traction[yn,2]*drxyz_G[0]-traction[yn,0]*drxyz_G[2])
+            rot[2] = (traction[yn,0]*drxyz_G[1]-traction[yn,1]*drxyz_G[0])
+          
+            traction2[xn,0] += hr*weights[yn]*(rot[1]*drxyz_R[2] - rot[2]*drxyz_R[1])
+            traction2[xn,1] += hr*weights[yn]*(rot[2]*drxyz_R[0] - rot[0]*drxyz_R[2])
+            traction2[xn,2] += hr*weights[yn]*(rot[0]*drxyz_R[1] - rot[1]*drxyz_R[0])
+        return traction2.flatten()
+
+      for k, b in enumerate(self.bodies):
+        RHS_t = np.zeros((b.Nblobs,3))
+        centxyz = b.location
+      
+        cent_velocity = b.velocity_new
+        cent_ang_velocity = b.angular_velocity_new
+
+        surface_xyz = b.get_r_vectors_surface()
+        for xn in range(b.Nblobs):
           drxyz_R = np.zeros(3)
-          drxyz_R[0] = surface_xyz[xn,0]-centxyz[0]
-          drxyz_R[1] = surface_xyz[xn,1]-centxyz[1]
-          drxyz_R[2] = surface_xyz[xn,2]-centxyz[2]
-          
-          hr = -1.0 / (8.0 * np.pi * self.eta * np.sqrt(dr_G**2 + 25E-6)**3)
-
-          rot[0] = (traction[yn,1]*drxyz_G[2]-traction[yn,2]*drxyz_G[1])
-          rot[1] = (traction[yn,2]*drxyz_G[0]-traction[yn,0]*drxyz_G[2])
-          rot[2] = (traction[yn,0]*drxyz_G[1]-traction[yn,1]*drxyz_G[0])
-          
-          traction2[xn,0] += hr*weights[yn]*(rot[1]*drxyz_R[2] - rot[2]*drxyz_R[1])
-          traction2[xn,1] += hr*weights[yn]*(rot[2]*drxyz_R[0] - rot[0]*drxyz_R[2])
-          traction2[xn,2] += hr*weights[yn]*(rot[0]*drxyz_R[1] - rot[1]*drxyz_R[0])
-      return traction2.flatten()
-
-    for k, b in enumerate(self.bodies):
-      RHS_t = np.zeros((b.Nblobs,3))
-      centxyz = b.location
+          drxyz_R[0] = surface_xyz[xn,0] - centxyz[0]
+          drxyz_R[1] = surface_xyz[xn,1] - centxyz[1]
+          drxyz_R[2] = surface_xyz[xn,2] - centxyz[2]
       
-      cent_velocity = b.velocity_new
-      cent_ang_velocity = b.angular_velocity_new
+          angVel = np.zeros(3)
+          angVel[0] = cent_ang_velocity[1]*drxyz_R[2] - cent_ang_velocity[2]*drxyz_R[1]
+          angVel[1] = cent_ang_velocity[2]*drxyz_R[0] - cent_ang_velocity[0]*drxyz_R[2]
+          angVel[2] = cent_ang_velocity[0]*drxyz_R[1] - cent_ang_velocity[1]*drxyz_R[0]
 
-      surface_xyz = b.get_r_vectors_surface()
-      for xn in range(b.Nblobs):
-        drxyz_R = np.zeros(3)
-        drxyz_R[0] = surface_xyz[xn,0] - centxyz[0]
-        drxyz_R[1] = surface_xyz[xn,1] - centxyz[1]
-        drxyz_R[2] = surface_xyz[xn,2] - centxyz[2]
-      
-        angVel = np.zeros(3)
-        angVel[0] = cent_ang_velocity[1]*drxyz_R[2] - cent_ang_velocity[2]*drxyz_R[1]
-        angVel[1] = cent_ang_velocity[2]*drxyz_R[0] - cent_ang_velocity[0]*drxyz_R[2]
-        angVel[2] = cent_ang_velocity[0]*drxyz_R[1] - cent_ang_velocity[1]*drxyz_R[0]
-
-        RHS_t[xn,0] = cent_velocity[0] + angVel[0] 
-        RHS_t[xn,1] = cent_velocity[1] + angVel[1] 
-        RHS_t[xn,2] = cent_velocity[2] + angVel[2] 
+          RHS_t[xn,0] = cent_velocity[0] + angVel[0] 
+          RHS_t[xn,1] = cent_velocity[1] + angVel[1] 
+          RHS_t[xn,2] = cent_velocity[2] + angVel[2] 
       
 
       
-      traction_operator_partial = partial(A_traction,body = b)
-      linear_operator_partial = scspla.LinearOperator((b.Nblobs*3, b.Nblobs*3), matvec = traction_operator_partial, dtype='float64')
+        traction_operator_partial = partial(A_traction,body = b)
+        linear_operator_partial = scspla.LinearOperator((b.Nblobs*3, b.Nblobs*3), matvec = traction_operator_partial, dtype='float64')
       
-      counter2 = gmres_counter(print_residual = True)
-      if np.remainder(self.step_now,self.n_save) == 0:
+        counter2 = gmres_counter(print_residual = True)
+      if False: #np.remainder(self.step_now,self.n_save) == 0:
         (solTraj, info_precond) = gmres.gmres(linear_operator_partial,
                                         RHS_t.flatten(),
                                         tol=1E-8,
@@ -1484,7 +1497,7 @@ class tstep(object):
         vgrid_cheb += vbdy2cheb.reshape((vbdy2cheb.size//3,3))
         vgrid_cube += vbdy2cube.reshape((vbdy2cube.size//3,3))
       
-      grid_points = grid_points.reshape((grid_points.size//3,3))
+      grid_cube = grid_cube.reshape((grid_cube.size//3,3))
       if self.bodies:
         loc = self.bodies[0].location
         ids = np.sqrt(((grid_cube[:,0]-loc[0])/self.body_a)**2 + ((loc[1]-grid_cube[:,1])/self.body_b)**2 + ((loc[2]-grid_cube[:,2])/self.body_c)**2) <= 1
@@ -1533,17 +1546,18 @@ class tstep(object):
       edges_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_edges_cube, 0)  
 
       # Write velocity field
-      visit_writer.boost_write_rectilinear_mesh(name,      # File's name
-                                                0,         # 0=ASCII,  1=Binary
-                                                dims,      # {mx, my, mz}
-                                                edges_cube[:,0],     # xmesh
-                                                edges_cube[:,1],     # ymesh
-                                                edges_cube[:,2],     # zmesh
-                                                nvars,     # Number of variables
-                                                vardims,   # Size of each variable, 1=scalar, velocity=3*scalars
-                                                centering, # Write to cell centers of corners
-                                                varnames,  # Variables' names
-                                                variables) # Variables
+      if False:
+        visit_writer.boost_write_rectilinear_mesh(name,      # File's name
+                                                  0,         # 0=ASCII,  1=Binary
+                                                  dims,      # {mx, my, mz}
+                                                  edges_cube[:,0],     # xmesh
+                                                  edges_cube[:,1],     # ymesh
+                                                  edges_cube[:,2],     # zmesh
+                                                  nvars,     # Number of variables
+                                                  vardims,   # Size of each variable, 1=scalar, velocity=3*scalars
+                                                  centering, # Write to cell centers of corners
+                                                  varnames,  # Variables' names
+                                                  variables) # Variables
   
     return # time_step_hydro
 
