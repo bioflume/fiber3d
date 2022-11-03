@@ -26,16 +26,16 @@ if __name__ == '__main__':
   fiber_length = 1
   
   # IF RESUMING, otherwise NONE
-  save_folder = '/work2/03353/gokberk/frontera/flagellaRuns/test1/'
-  resume_fiber_file = save_folder + 'run_fibers_resume.fibers'
-  resume_body_file = save_folder + 'run_body_resume.clones'
-  resume_time_file = save_folder + 'run_time_system_size.txt'
-  body_link_location_file = save_folder + '_links_location.txt'
+  save_folder = None # '/work2/03353/gokberk/frontera/flagellaRuns/test1/'
+  resume_fiber_file = None #save_folder + 'run_fibers_resume.fibers'
+  resume_body_file = None #save_folder + 'run_body_resume.clones'
+  resume_time_file = None #save_folder + 'run_time_system_size.txt'
+  body_link_location_file = None # save_folder + '_links_location.txt'
   
-  info = np.loadtxt(resume_time_file, dtype = np.float64)
-  resume_from_time = info[-1,1]
+  #info = np.loadtxt(resume_time_file, dtype = np.float64)
+  resume_from_time = 0 #info[-1,1]
   
-  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test1_resume/run'
+  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test1/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
   ncompute_vel = 450

@@ -5,7 +5,11 @@ visit_writer to write files in VTK format.
 
 import numpy as np
 import visit_writer_interface
-
+try:
+    import visit_writer_interface
+except ImportError:
+    from visit import visit_writer_interface
+        
 #def boost_write_regular_mesh(name,       # File's name
                              #format,     # 0=ASCII,  1=Binary
                              #dims,       # {mx, my, mz}

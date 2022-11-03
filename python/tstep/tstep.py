@@ -15,13 +15,15 @@ try:
 except ImportError:
   pass
 
+from visit import visit_writer
+
 # Try to import the visit_writer (boost implementation)
-try:
+#try:
   # import visit.visit_writer as visit_writer
-  from visit import visit_writer as visit_writer
-except ImportError as e:
-  print(e)
-  pass
+#  from visit import visit_writer as visit_writer
+#except ImportError as e:
+#  print(e)
+#  pass
 
 from scipy.spatial import ConvexHull
 
@@ -1549,7 +1551,7 @@ class tstep(object):
       edges_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_edges_cube, 0)  
 
       # Write velocity field
-      if False:
+      if True:
         visit_writer.boost_write_rectilinear_mesh(name,      # File's name
                                                   0,         # 0=ASCII,  1=Binary
                                                   dims,      # {mx, my, mz}
