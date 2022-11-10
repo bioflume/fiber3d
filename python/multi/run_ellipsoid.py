@@ -7,7 +7,7 @@ from tstep import initialize
 if __name__ == '__main__':
   clamp_oscil_mag = np.pi/4
   clamp_oscil_k = 1
-  clamp_oscil_speed = 0.10
+  clamp_oscil_speed = 0.05
   body_shape = 'ellipsoid'
   body_a = 2
   body_b = 2
@@ -35,18 +35,18 @@ if __name__ == '__main__':
   #info = np.loadtxt(resume_time_file, dtype = np.float64)
   resume_from_time = 0 #info[-1,1]
   
-  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test2/run'
+  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test3/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
-  ncompute_vel = 450*5
+  ncompute_vel = 450
 
   random_seed = 32
   time_step_scheme = 'time_step_hydro'
   Nbody = 800
   
   precompute_body_PC = True
-  dt = 1E-3
-  dt_max = 1E-3
+  dt = 5E-3
+  dt_max = 5E-3
   num_points_max = 256
   Nfiber = 48
   
@@ -66,7 +66,7 @@ if __name__ == '__main__':
                                   dt_max = dt_max,
                                   tol_tstep = 1e-1,
                                   tol_gmres = 1e-10,
-                                  n_save = 250,
+                                  n_save = 50,
                                   output_name=filename,
                                   save_file = None,
                                   precompute_body_PC = precompute_body_PC,
