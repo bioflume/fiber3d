@@ -1541,8 +1541,8 @@ class tstep(object):
       
       # Prepara data for VTK writer 
       variables = [np.reshape(vgrid_cube, vgrid_cube.size)] 
-      num_points = grid_cube.size//3 
-      dims = np.array([num_points+1, num_points+1, num_points+1], dtype=np.int32) 
+      num_points_dir = int(np.ceil(np.power(grid_cube.size//3,1/3)))
+      dims = np.array([num_points_dir+1, num_points_dir+1, num_points_dir+1], dtype=np.int32) 
       nvars = 1
       vardims = np.array([3])
       centering = np.array([0])
