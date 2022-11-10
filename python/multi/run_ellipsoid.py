@@ -14,7 +14,7 @@ if __name__ == '__main__':
   body_c = 4 # largest radius
   velMeasureRad = 2 * (2*body_c) # velocity on a shell of radius r = 2 * b, b: the largest diameter of the swimmer 
   velMeasureP = 16 # Chebyshev orderks
-  num_fibers = 200
+  num_fibers = 175
   fiber_position = None
   #fiber_position = []
   #fiber_position.append([2.0,0.0,0.0])
@@ -35,18 +35,18 @@ if __name__ == '__main__':
   #info = np.loadtxt(resume_time_file, dtype = np.float64)
   resume_from_time = 0 #info[-1,1]
   
-  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test1/run'
+  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test2/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
-  ncompute_vel = 450
+  ncompute_vel = 450*5
 
-  random_seed = 1
+  random_seed = 32
   time_step_scheme = 'time_step_hydro'
-  Nbody = 600
+  Nbody = 800
   
   precompute_body_PC = True
-  dt = 5E-3
-  dt_max = 1E-2
+  dt = 1E-3
+  dt_max = 1E-3
   num_points_max = 256
   Nfiber = 48
   
@@ -66,7 +66,7 @@ if __name__ == '__main__':
                                   dt_max = dt_max,
                                   tol_tstep = 1e-1,
                                   tol_gmres = 1e-10,
-                                  n_save = 50,
+                                  n_save = 250,
                                   output_name=filename,
                                   save_file = None,
                                   precompute_body_PC = precompute_body_PC,
