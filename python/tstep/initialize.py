@@ -546,30 +546,30 @@ def initialize_from_file(input_file,options,prams):
       fId = open(name,'wb')
       np.savetxt(fId,links_location)
       fId.close()
-    else:
-      fibers_info, fibers_coor = read_fibers_file.read_fibers_file(prams.resume_fiber_file)
-      # Create each fiber structure of type structure 
-      offset = 0
-      for i in range(len(fibers_info)):
-        num_points = options.num_points
-        length = prams.fiber_length
-        if len(fibers_info[i])> 0: num_points = fibers_info[i][0]
-        if len(fibers_info[i])> 2: length = fibers_info[i][2] 
+  else:
+    fibers_info, fibers_coor = read_fibers_file.read_fibers_file(prams.resume_fiber_file)
+    # Create each fiber structure of type structure 
+    offset = 0
+    for i in range(len(fibers_info)):
+      num_points = options.num_points
+      length = prams.fiber_length
+      if len(fibers_info[i])> 0: num_points = fibers_info[i][0]
+      if len(fibers_info[i])> 2: length = fibers_info[i][2] 
         
-        fib_x = fibers_coor[offset : offset + num_points]
-        fib = fiber.fiber(num_points = num_points,
-                          num_points_max = options.num_points_max,
-                          num_points_finite_diff = options.num_points_finite_diff,
-                          dt = options.dt,
-                          E = prams.Efib,
-                          length = length,
-                          adaptive_num_points = options.adaptive_num_points,
-                          viscosity = prams.eta)
-        fib.ID = 'fibers'
-        fib.x = fib_x
-        fib.nuc_site_idx = int(i)
-        fib.attached_to_body = 0
-        fibers.append(fib)
+      fib_x = fibers_coor[offset : offset + num_points]
+      fib = fiber.fiber(num_points = num_points,
+                        num_points_max = options.num_points_max,
+                        num_points_finite_diff = options.num_points_finite_diff,
+                        dt = options.dt,
+                        E = prams.Efib,
+                        length = length,
+                        adaptive_num_points = options.adaptive_num_points,
+                        viscosity = prams.eta)
+      fib.ID = 'fibers'
+      fib.x = fib_x
+      fib.nuc_site_idx = int(i)
+      fib.attached_to_body = 0
+      fibers.append(fib)
         
   # Set some more variables
   fibers_names.append('fibers')
