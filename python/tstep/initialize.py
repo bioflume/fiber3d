@@ -570,6 +570,7 @@ def initialize_from_file(input_file,options,prams):
       fib.nuc_site_idx = int(i)
       fib.attached_to_body = 0
       fibers.append(fib)
+      offset += num_points
         
   # Set some more variables
   fibers_names.append('fibers')
