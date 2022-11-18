@@ -206,27 +206,52 @@ class tstep(object):
       max_size = np.max([prams.body_a, prams.body_b, prams.body_c]) # max radius
       Lcube = 3*(2*max_size) # 3 * max_diameter
       Ncube = 100
-      xg = np.linspace(-Lcube/2,Lcube/2,Ncube)
-      [xx, yy, zz] = np.meshgrid(xg,xg,xg,sparse=False,indexing='ij')
-      xx = xx.flatten()
-      yy = yy.flatten()
-      zz = zz.flatten()
-      xx = xx.reshape((xx.size,1))
-      yy = yy.reshape((yy.size,1))
-      zz = zz.reshape((zz.size,1))
-      self.ref_grid_cube = np.concatenate((xx, yy, zz), axis = 1)   
+      if False:
+        xg = np.linspace(-Lcube/2,Lcube/2,Ncube)
+        [xx, yy, zz] = np.meshgrid(xg,xg,xg,sparse=False,indexing='ij')
+        xx = xx.flatten()
+        yy = yy.flatten()
+        zz = zz.flatten()
+        xx = xx.reshape((xx.size,1))
+        yy = yy.reshape((yy.size,1))
+        zz = zz.reshape((zz.size,1))
+        self.ref_grid_cube = np.concatenate((xx, yy, zz), axis = 1)   
+         # Edges of the cells should be stored too
+        dx_grid = grid_x[1]-grid_y[0]     
+        grid_xe = np.arange(Ncube + 1) * dx_grid + - Lcube/2
+        [xx, yy, zz] = np.meshgrid(grid_xe,grid_xe,grid_xe,indexing='ij')
+        xx = xx.flatten()
+        yy = yy.flatten()
+        zz = zz.flatten()
+        xx = xx.reshape((xx.size,1))
+        yy = yy.reshape((yy.size,1))
+        zz = zz.reshape((zz.size,1))
+        self.ref_edges_cube = np.concatenate((xx, yy, zz), axis = 1)
       
-      # Edges of the cells should be stored too
-      dx_grid = xg[1]-xg[0]     
-      grid_x = np.arange(Ncube + 1) * dx_grid + - Lcube/2
-      [xx, yy, zz] = np.meshgrid(grid_x,grid_x,grid_x,sparse=False,indexing='ij')
-      xx = xx.flatten()
-      yy = yy.flatten()
-      zz = zz.flatten()
-      xx = xx.reshape((xx.size,1))
-      yy = yy.reshape((yy.size,1))
-      zz = zz.reshape((zz.size,1))
-      self.ref_edges_cube = np.concatenate((xx, yy, zz), axis = 1)
+      grid_length = Lcube
+      grid_points = np.array([Ncube, Ncube, Ncube], dtype=np.int32)
+      num_points = grid_points[0]*grid_points[1]*grid_points[2]
+      dx_grid = grid_length/grid_points
+      grid_x = np.array([-Lcube/2 + dx_grid[0] * (x+0.5) for x in range(grid_points[0])])
+      grid_y = np.array([-Lcube/2 + dx_grid[1] * (x+0.5) for x in range(grid_points[1])])
+      grid_z = np.array([-Lcube/2 + dx_grid[2] * (x+0.5) for x in range(grid_points[2])])
+      
+      zz, yy, xx = np.meshgrid(grid_z, grid_y, grid_x, indexing = 'ij')
+      self.ref_grid_cube = np.zeros((num_points, 3))
+      self.ref_grid_cube[:,0] = np.reshape(xx, xx.size)
+      self.ref_grid_cube[:,1] = np.reshape(yy, yy.size)
+      self.ref_grid_cube[:,2] = np.reshape(zz, zz.size)
+
+      grid_x = grid_x - dx_grid[0] * 0.5
+      grid_y = grid_y - dx_grid[1] * 0.5
+      grid_z = grid_z - dx_grid[2] * 0.5
+      self.ref_edges_cube = np.array([Ncube + 1, Ncube+1, Ncube+1])
+      self.ref_edges_cube[:,0] = np.concatenate([grid_x, Lcube/2])
+      self.ref_edges_cube[:,1] = np.concatenate([grid_y, Lcube/2])
+      self.ref_edges_cube[:,2] = np.concatenate([grid_z, Lcube/2])
+      
+      
+     
  
     
     name = options.output_name + '_ref_cheb_grid.txt'
