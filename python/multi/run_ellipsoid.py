@@ -35,10 +35,10 @@ if __name__ == '__main__':
   info = np.loadtxt(resume_time_file, dtype = np.float64)
   resume_from_time = info[-1,1] #0
   
-  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test4_resume/run'
+  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test4_test/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
-  ncompute_vel = 900
+  ncompute_vel = 1#900
 
   random_seed = 32
   time_step_scheme = 'time_step_hydro'
@@ -66,7 +66,7 @@ if __name__ == '__main__':
                                   dt_max = dt_max,
                                   tol_tstep = 1e-1,
                                   tol_gmres = 1e-10,
-                                  n_save = 100,
+                                  n_save = 1,
                                   output_name=filename,
                                   save_file = None,
                                   precompute_body_PC = precompute_body_PC,

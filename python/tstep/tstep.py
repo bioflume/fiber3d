@@ -245,10 +245,11 @@ class tstep(object):
       grid_x = grid_x - dx_grid[0] * 0.5
       grid_y = grid_y - dx_grid[1] * 0.5
       grid_z = grid_z - dx_grid[2] * 0.5
-      self.ref_edges_cube = np.array([Ncube + 1, Ncube+1, Ncube+1])
-      self.ref_edges_cube[:,0] = np.concatenate([grid_x, Lcube/2])
-      self.ref_edges_cube[:,1] = np.concatenate([grid_y, Lcube/2])
-      self.ref_edges_cube[:,2] = np.concatenate([grid_z, Lcube/2])
+      gridEnd = np.array([Lcube/2])
+      self.ref_edges_cube = np.zeros((Ncube+1,3))
+      self.ref_edges_cube[:,0] = np.concatenate([grid_x,[gridEnd[0]]])
+      self.ref_edges_cube[:,1] = np.concatenate([grid_y,[gridEnd[0]]])
+      self.ref_edges_cube[:,2] = np.concatenate([grid_z,[gridEnd[0]]])
       
       
      
