@@ -251,10 +251,10 @@ class tstep(object):
       self.ref_edges_cube[:,1] = np.concatenate([grid_y,[gridEnd[0]]])
       self.ref_edges_cube[:,2] = np.concatenate([grid_z,[gridEnd[0]]])
       
-      
-     
- 
-    
+      self.ref_edges_cube_x = np.concatenate([grid_x,[gridEnd[0]]])
+      self.ref_edges_cube_y = np.concatenate([grid_y,[gridEnd[0]]]) 
+      self.ref_edges_cube_z = np.concatenate([grid_z,[gridEnd[0]]])
+       
     name = options.output_name + '_ref_cheb_grid.txt'
     with open(name, 'w') as f:
       np.savetxt(f, self.ref_grid_cheb)
@@ -1574,16 +1574,19 @@ class tstep(object):
       centering = np.array([0])
       varnames = ['velocity\0']
       name = self.output_name + '_onCube_atStep' + str(self.step_now) + '.velocity_field.vtk'
-      edges_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_edges_cube, 0)  
-
+      #edges_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_edges_cube, 0)  
+      edges_x = np.copy(self.ref_edges_cube_x)
+      edges_y = np.copy(self.ref_edges_cube_y)
+      edges_z = np.copy(self.ref_edges_cube_z)
+      
       # Write velocity field
       if True:
         visit_writer.boost_write_rectilinear_mesh(name,      # File's name
                                                   0,         # 0=ASCII,  1=Binary
                                                   dims,      # {mx, my, mz}
-                                                  edges_cube[:,0],     # xmesh
-                                                  edges_cube[:,1],     # ymesh
-                                                  edges_cube[:,2],     # zmesh
+                                                  edges_x,     # xmesh
+                                                  edges_y,     # ymesh
+                                                  edges_z,     # zmesh
                                                   nvars,     # Number of variables
                                                   vardims,   # Size of each variable, 1=scalar, velocity=3*scalars
                                                   centering, # Write to cell centers of corners
