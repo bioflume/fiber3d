@@ -117,12 +117,12 @@ def get_vectors_frame_body(bodies, r_grid, frame_body):
   if frame_body >= 0:
     # Get reference body rotation matrix and its location.
     # R0 rotates vectors to the body frame of reference
-    R0 = bodies[frame_body].orientation.rotation_matrix()
+    R0 = bodies[frame_body].orientation.rotation_matrix().T
     location0 = bodies[frame_body].location
 
-    # Translate and rotate grid postions
-    r_grid_frame = np.array([np.dot(R0, vec) for vec in r_grid])
-    r_grid_frame += location0
+    for i, ri in enumerate(r_grid):
+      r_grid_frame[i] = np.dot(R0.T, ri) + location0
+    
 
   else:
     # If frame_body < 0 use the lab frame of reference; i.e. do not translate or rotate anything
