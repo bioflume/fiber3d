@@ -727,6 +727,7 @@ class tstep(object):
     # 1.3. External forces
     force_bodies = np.zeros((len(self.bodies),6))
     force_fibers = np.zeros((offset_fibers[-1],3))
+    force_bodies[0,2] = 1.0
 
     motor_force_fibers = np.zeros((offset_fibers[-1],3))
     if self.iCytoPulling:
