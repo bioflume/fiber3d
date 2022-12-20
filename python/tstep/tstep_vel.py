@@ -727,7 +727,7 @@ class tstep(object):
     # 1.3. External forces
     force_bodies = np.zeros((len(self.bodies),6))
     force_fibers = np.zeros((offset_fibers[-1],3))
-    #force_bodies[0,2] = 1.0
+    force_bodies[0,2] = 1.0
 
     motor_force_fibers = np.zeros((offset_fibers[-1],3))
     if self.iCytoPulling:
@@ -1401,6 +1401,70 @@ class tstep(object):
       grid_cheb = grid_cheb.flatten()
       grid_cube = grid_cube.flatten()
       
+      fibers = copy.copy(self.fibers)
+      bodies = copy.copy(self.bodies)
+      if self.fibers:
+        indx = np.where(self.fib_mat_resolutions == fibers[0].num_points)
+        # Get the class that has the matrices
+        fib_mat = self.fib_mats[indx[0][0]]
+
+        # Call differentiation matrices
+        D_1, D_2, D_3, D_4 = fib_mat.get_matrices(fibers[0].length_previous, fibers[0].num_points_up, 'Ds')
+      
+      trg_fib = np.zeros((offset_fibers[-1],3))
+      for k, fib in enumerate(fibers):  
+        fib.tension = np.copy(fib.tension_new)
+        fib.x = np.copy(fib.x_new)
+        fib.xs = np.dot(D_1, fib.x)
+        fib.xss = np.dot(D_2, fib.x)
+        fib.xsss = np.dot(D_3, fib.x)
+        fib.xssss = np.dot(D_4, fib.x)
+        trg_fib[offset_fibers[k] : offset_fibers[k+1]] = fib.x
+        
+      # Bodies
+      K_bodies, normals_blobs = [], np.empty((offset_bodies[-1],3))
+      trg_bdy_cent = np.zeros((len(self.bodies),3))
+      trg_bdy_surf = np.zeros((offset_bodies[-1],3))
+      for k, b in enumerate(bodies):
+        b.density = np.copy(b.density_new)
+        b.location = np.copy(b.location_new)
+        b.orientation = b.orientation_new
+        b.velocity = np.copy(b.velocity_new)
+        b.angular_velocity = np.copy(b.angular_velocity_new)
+        trg_bdy_cent[k] = b.location
+        r_vec_surface = b.get_r_vectors_surface()
+        trg_bdy_surf[offset_bodies[k]:offset_bodies[k+1]] = r_vec_surface
+        # Normals
+        normals_blobs[offset_bodies[k]:offset_bodies[k+1]] = b.get_normals()
+        # Compute correction for singularity subtractions
+        b.calc_vectors_singularity_subtraction(eta = self.bodies[0].viscosity_scale*self.eta, r_vectors = r_vec_surface, normals = normals_blobs[offset_bodies[k]:offset_bodies[k+1]])
+        # Build K_matrix
+        K_bodies.append(b.calc_K_matrix())
+      
+      # Build Stokeslet for fibers
+      Gfibers = []
+      if self.fibers:
+      
+        if self.useFMM:
+          Gfibers = tstep_utils.get_self_fibers_FMMStokeslet(fibers, self.eta,
+                                                    fib_mats = self.fib_mats,
+                                                    fib_mat_resolutions = self.fib_mat_resolutions,
+                                                    iupsample = self.iupsample)
+        else:
+          Gfibers = tstep_utils.get_self_fibers_Stokeslet(fibers, self.eta,
+                                                    fib_mats = self.fib_mats,
+                                                    fib_mat_resolutions = self.fib_mat_resolutions,
+                                                    iupsample = self.iupsample)
+
+      # 3.2. Fibers' force operator (sparse)
+      fibers_force_operator = []
+      if self.fibers:  
+        fibers_force_operator = tstep_utils.build_fibers_force_operator(fibers, self.fib_mats, self.fib_mat_resolutions)
+      As_BC = []
+      if self.fibers and self.bodies:  
+        As_BC = tstep_utils.build_link_matrix(4*offset_fibers[-1]+6*len(self.bodies), bodies,fibers, offset_fibers, 6*len(self.bodies),
+          self.fib_mats, self.fib_mat_resolutions)
+      
       def compute_velocity(x_all, bodies, shell,
                         trg_bdy_surf, trg_bdy_cent, trg_shell_surf,
                         normals_blobs, normals_shell,
@@ -1474,9 +1538,9 @@ class tstep(object):
 
         # VELOCITY DUE TO FIBERS
         if fibers:
-          vfib2cheb = tstep_utils.flow_fibers(fw, trg_fib, grid_cheb, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+          vfib2cheb = tstep_utils.flow_fibers(fw, trg_fib, grid_cheb, fibers, offset_fibers, self.eta, integration = self.integration ,
             fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
-          vfib2cube = tstep_utils.flow_fibers(fw, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+          vfib2cube = tstep_utils.flow_fibers(fw, trg_fib, grid_cube, fibers, offset_fibers, self.eta, integration = self.integration ,
             fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
         else:
           vfib2cheb = np.zeros_like(grid_cheb)
@@ -1501,16 +1565,16 @@ class tstep(object):
         vgrid_cheb = vshell2cheb.reshape((vshell2cheb.size//3,3)) + vbdy2cheb.reshape((vbdy2cheb.size//3, 3)) + vfib2cheb.reshape((vfib2cheb.size//3, 3))
         return vgrid_cube, vgrid_cheb
 
-      vgrid_cube, vgrid_cheb = compute_velocity(sol, self.bodies, self.shell,
+      vgrid_cube, vgrid_cheb = compute_velocity(sol, bodies, self.shell,
                       trg_bdy_surf, trg_bdy_cent, self.trg_shell_surf,
                       normals_blobs, self.normals_shell,
-                      As_fibers, As_BC, Gfibers, self.fibers, trg_fib,
+                      As_fibers, As_BC, Gfibers, fibers, trg_fib,
                       fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = K_bodies)
 
       if force_fibers.any():
-        vfib2cube = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+        vfib2cube = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cube, fibers, offset_fibers, self.eta, integration = self.integration ,
             fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
-        vfib2cheb = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cheb, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+        vfib2cheb = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cheb, fibers, offset_fibers, self.eta, integration = self.integration ,
             fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
         vgrid_cube += vfib2cube.reshape((vfib2cube.size//3,3))
         vgrid_cheb += vfib2cheb.reshape((vfib2cheb.size//3,3))
