@@ -32,8 +32,8 @@ if __name__ == '__main__':
   resume_fiber_file = None #save_folder + 'run_fibers_resume.fibers'
   resume_body_file = None #save_folder + 'run_body_resume.clones'
   resume_time_file = []
-  resume_time_file.append(save_folder + 'run_time_system_size.txt')
-  resume_time_file.append(save_folder0 + 'run_time_system_size.txt')
+  #resume_time_file.append(save_folder + 'run_time_system_size.txt')
+ # resume_time_file.append(save_folder0 + 'run_time_system_size.txt')
   body_link_location_file = None #save_folder + 'run_links_location.txt'
   
   resume_from_time = 0
@@ -44,7 +44,7 @@ if __name__ == '__main__':
   filename = '/work2/03353/gokberk/frontera/flagellaRuns/test5_resume_test/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
-  ncompute_vel = 900
+  ncompute_vel = 1
 
   random_seed = 32
   time_step_scheme = 'time_step_hydro'
@@ -72,7 +72,7 @@ if __name__ == '__main__':
                                   dt_max = dt_max,
                                   tol_tstep = 1e-1,
                                   tol_gmres = 1e-10,
-                                  n_save = 100,
+                                  n_save = 1,
                                   output_name=filename,
                                   save_file = None,
                                   precompute_body_PC = precompute_body_PC,
