@@ -1262,6 +1262,39 @@ class tstep(object):
       grid_cheb = grid_cheb.flatten()
       grid_cube = grid_cube.flatten()
       
+      fibs = copy.copy(self.fibers)
+      indx = np.where(self.fib_mat_resolutions == fibs[0].num_points)
+      # Get the class that has the matrices
+      fib_mat = self.fib_mats[indx[0][0]]
+
+      # Call differentiation matrices
+      D_1, D_2, D_3, D_4 = fib_mat.get_matrices(fibs[0].length_previous, fibs[0].num_points_up, 'Ds')
+      
+      trg_fib = np.zeros((offset_fibers[-1],3))
+      for k, fib in enumerate(fibs):  
+        fib.tension = np.copy(fib.tension_new)
+        fib.x = np.copy(fib.x_new)
+        fib.xs = np.dot(D_1, fib.x)
+        fib.xss = np.dot(D_2, fib.x)
+        fib.xsss = np.dot(D_3, fib.x)
+        fib.xssss = np.dot(D_4, fib.x)
+        trg_fib[offset_fibers[k] : offset_fibers[k+1]] = fib.x
+      
+      # Build Stokeslet for fibers
+      Gfibers = []
+
+      if self.useFMM:
+        Gfibers = tstep_utils.get_self_fibers_FMMStokeslet(fibs, self.eta,
+                                                  fib_mats = self.fib_mats,
+                                                  fib_mat_resolutions = self.fib_mat_resolutions,
+                                                  iupsample = self.iupsample)
+      else:
+        Gfibers = tstep_utils.get_self_fibers_Stokeslet(fibs, self.eta,
+                                                   fib_mats = self.fib_mats,
+                                                   fib_mat_resolutions = self.fib_mat_resolutions,
+                                                   iupsample = self.iupsample)
+      fibers_force_operator = tstep_utils.build_fibers_force_operator(fibs, self.fib_mats, self.fib_mat_resolutions)
+          
       def compute_velocity(x_all, bodies, shell,
                         trg_bdy_surf, trg_bdy_cent, trg_shell_surf,
                         normals_blobs, normals_shell,
@@ -1302,7 +1335,41 @@ class tstep(object):
           print('Sum-x', np.sum(fw[:,0]))
           print('Sum-y', np.sum(fw[:,1]))
           print('Sum-z', np.sum(fw[:,2]))
-
+          fib = fibs[0]
+          print('Xssss', fib.xssss)
+          print('Sum-xssss', np.sum(fib.xssss[:,0]))
+          print('Sum-yssss', np.sum(fib.xssss[:,1]))
+          print('Sum-zssss', np.sum(fib.xssss[:,2]))
+         
+          D_1, D_2, D_3, D_4 = fib_mat.get_matrices(fib.length_previous, fib.num_points_up, 'Ds')
+          
+          A_XT = np.diag(fib.xss[:,0])
+          A_YT = np.diag(fib.xss[:,1])
+          A_ZT = np.diag(fib.xss[:,2])
+          xssT = A_XT * fib.tension
+          yssT = A_YT * fib.tension
+          zssT = A_ZT * fib.tension
+          
+          print('xssT', np.sum(xssT))
+          print('yssT', np.sum(yssT))
+          print('zssT', np.sum(zssT))
+         
+          A_XT = (D_1.T * fib.xs[:,0]).T
+          A_YT = (D_1.T * fib.xs[:,1]).T
+          A_ZT = (D_1.T * fib.xs[:,2]).T
+         
+          xsTs = A_XT * fib.tension
+          ysTs = A_YT * fib.tension
+          zsTs = A_ZT * fib.tension 
+          
+          print('xssT', xsTs)
+          print('yssT', ysTs)
+          print('zssT', zsTs)
+          
+          print('xssT', np.sum(xsTs))
+          print('yssT', np.sum(ysTs))
+          print('zssT', np.sum(zsTs)) 
+          
         # VELOCITY DUE TO BODIES
         if bodies:
           # Due to hydrodynamic density
@@ -1371,7 +1438,7 @@ class tstep(object):
       vgrid_cube, vgrid_cheb = compute_velocity(sol, self.bodies, self.shell,
                       trg_bdy_surf, trg_bdy_cent, self.trg_shell_surf,
                       normals_blobs, self.normals_shell,
-                      As_fibers, As_BC, Gfibers, self.fibers, trg_fib,
+                      As_fibers, As_BC, Gfibers, fibs, trg_fib,
                       fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = K_bodies)
       print('external force', force_fibers)
       input()
@@ -1449,7 +1516,7 @@ class tstep(object):
       edges_z = np.copy(self.ref_edges_cube_z)
       
       # Write velocity field
-      if True:
+      if False:
         visit_writer.boost_write_rectilinear_mesh(name,      # File's name
                                                   0,         # 0=ASCII,  1=Binary
                                                   dims,      # {mx, my, mz}
