@@ -808,7 +808,8 @@ class tstep(object):
     flat2mat_lastTenBC = np.zeros((4*offset_fibers[-1]), dtype = bool)
 
     P_cheb_all = []
-    rot_mat = self.bodies[0].orientation.rotation_matrix()
+    if self.bodies:
+      rot_mat = self.bodies[0].orientation.rotation_matrix()
     for k, fib in enumerate(self.fibers):
       flat2mat[3*offset_fibers[k]                   :3*offset_fibers[k] +   fib.num_points,0] = True
       flat2mat[3*offset_fibers[k] +   fib.num_points:3*offset_fibers[k] + 2*fib.num_points,1] = True
@@ -1196,12 +1197,13 @@ class tstep(object):
       fw_sol[:,0] = force_on_fibers[flat2mat[:,0]]
       fw_sol[:,1] = force_on_fibers[flat2mat[:,1]]
       fw_sol[:,2] = force_on_fibers[flat2mat[:,2]]
-      body_vel_xt = np.concatenate((body_velocities.flatten(),XT.flatten()), axis=0)
-      y_BC = As_BC.dot(body_vel_xt)
-      self.force_on_mtoc = np.zeros((len(self.bodies),6))
-      for k, b in enumerate(self.bodies):
-        self.force_on_mtoc[k,:3] = y_BC[6*k : 6*k+3]
-        self.force_on_mtoc[k,3:] = y_BC[6*k+3 : 6*k+6]
+      if As_BC:
+        body_vel_xt = np.concatenate((body_velocities.flatten(),XT.flatten()), axis=0)
+        y_BC = As_BC.dot(body_vel_xt)
+        self.force_on_mtoc = np.zeros((len(self.bodies),6))
+        for k, b in enumerate(self.bodies):
+          self.force_on_mtoc[k,:3] = y_BC[6*k : 6*k+3]
+          self.force_on_mtoc[k,3:] = y_BC[6*k+3 : 6*k+6]
 
 
     # ---------------------------------------
@@ -1300,6 +1302,7 @@ class tstep(object):
           print('Sum-x', np.sum(fw[:,0]))
           print('Sum-y', np.sum(fw[:,1]))
           print('Sum-z', np.sum(fw[:,2]))
+
         # VELOCITY DUE TO BODIES
         if bodies:
           # Due to hydrodynamic density
@@ -1370,7 +1373,8 @@ class tstep(object):
                       normals_blobs, self.normals_shell,
                       As_fibers, As_BC, Gfibers, self.fibers, trg_fib,
                       fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = K_bodies)
-
+      print('external force', force_fibers)
+      input()
       if force_fibers.any():
         vfib2cube = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
             fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)

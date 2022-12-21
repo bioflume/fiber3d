@@ -26,7 +26,7 @@ if __name__ == '__main__':
   fiber_length = 1
   
   # IF RESUMING, otherwise NONE
-  save_folder = 'work2/03353/gokberk/frontera/flagellaRuns/test5/'
+  save_folder = '/work2/03353/gokberk/frontera/flagellaRuns/test5/'
 
   resume_fiber_file = save_folder + 'run_fibers_resume.fibers'
   resume_body_file = None #save_folder + 'run_body_resume.clones'

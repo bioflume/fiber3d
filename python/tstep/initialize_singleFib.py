@@ -326,7 +326,10 @@ def initialize_from_file(input_file,options,prams):
   f_fibers_ID = []
   f_fibers_forces_ID = []
   f_bodies_ID = []
-  f_body_vels_ID = []
+  f_body_vel_ID = []
+  f_body_density_ID = []
+  f_traction_ID = []
+  f_body_force_ID = []
   f_bodies_forces_ID = []
   f_molecular_motors_ID = []
 
@@ -337,9 +340,8 @@ def initialize_from_file(input_file,options,prams):
   f_bodies_mm_attached_ID = []
   f_bodies_mm_attached_forces_ID = []
   f_mm_on_moving_surf_ID = []
-
+  total_nuc_sites = 0
   if False:
-    total_nuc_sites = 0
     orientation = [1, 0, 0, 0]
     norm_orientation = np.linalg.norm(orientation)
     struct_orientation = quaternion.Quaternion(orientation / norm_orientation)
