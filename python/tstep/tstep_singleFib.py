@@ -531,7 +531,7 @@ class tstep(object):
           b.velocity, b.angular_velocity = np.copy(b.velocity_new), np.copy(b.angular_velocity_new)
           if hasattr(b,'density'): b.density = np.copy(b.density_new)
 
-        self.fibers_types = np.zeros(len(self.bodies))
+        #self.fibers_types = np.zeros(len(self.bodies))
 
         for k, fib in enumerate(self.fibers):
           fib.x_old = np.copy(fib.x)
@@ -686,6 +686,7 @@ class tstep(object):
     # 1.3. External forces
     force_bodies = np.zeros((len(self.bodies),6))
     force_fibers = np.zeros((offset_fibers[-1],3))
+    force_fibers[:,2] = -2
     #force_bodies[0,2] = 1.0
 
     motor_force_fibers = np.zeros((offset_fibers[-1],3))
@@ -1321,54 +1322,44 @@ class tstep(object):
         if fibers:
           # Fibers' unknowns
           XT = x_all[offset+offset_bodies[-1]*3 + len(bodies)*6:]
-          
+          fib = fibs[0] 
+          weights, weights_up, out3, out4 = fib_mat.get_matrices(fib.length_previous, fib.num_points_up,'weights_all')
+          D_1, D_2, D_3, D_4 = fib_mat.get_matrices(fib.length_previous, fib.num_points_up, 'Ds')
 
           # Compute implicit fiber forces
           force_fibers = fibers_force_operator.dot(XT)
           
+          fBend = -fib.E * fib.xssss
+          fTen = np.dot(D_1,  fib.xs*fib.tension[:,None])
+          #force_fibers = fBend + fTen
+         
+          sum_fBend = fBend * weights[:,None]
+          sum_fTen = fTen * weights[:,None]
+          print('fBendX', np.sum(sum_fBend[:,0]))
+          print('fBendY', np.sum(sum_fBend[:,1]))
+          print('fBendZ', np.sum(sum_fBend[:,2]))
+          print('fTenX', np.sum(sum_fTen[:,0]))
+          print('fTenY', np.sum(sum_fTen[:,1]))
+          print('fTenZ', np.sum(sum_fTen[:,2]))
+
           # Reorder array
+          #fw = np.copy(force_fibers)
           fw = np.zeros((force_fibers.size // 3, 3))
           fw[:,0] = force_fibers[flat2mat[:,0]]
           fw[:,1] = force_fibers[flat2mat[:,1]]
           fw[:,2] = force_fibers[flat2mat[:,2]]
-          print('Force', fw)
-          print('Sum-x', np.sum(fw[:,0]))
-          print('Sum-y', np.sum(fw[:,1]))
-          print('Sum-z', np.sum(fw[:,2]))
-          fib = fibs[0]
-          print('Xssss', fib.xssss)
-          print('Sum-xssss', np.sum(fib.xssss[:,0]))
-          print('Sum-yssss', np.sum(fib.xssss[:,1]))
-          print('Sum-zssss', np.sum(fib.xssss[:,2]))
-         
-          D_1, D_2, D_3, D_4 = fib_mat.get_matrices(fib.length_previous, fib.num_points_up, 'Ds')
+
+          sum_fw = fw * weights[:,None]
+
+          #print('Force', fw)
+          print('Sum-x', np.sum(sum_fw[:,0]))
+          print('Sum-y', np.sum(sum_fw[:,1]))
+          print('Sum-z', np.sum(sum_fw[:,2]))
           
-          A_XT = np.diag(fib.xss[:,0])
-          A_YT = np.diag(fib.xss[:,1])
-          A_ZT = np.diag(fib.xss[:,2])
-          xssT = A_XT * fib.tension
-          yssT = A_YT * fib.tension
-          zssT = A_ZT * fib.tension
-          
-          print('xssT', np.sum(xssT))
-          print('yssT', np.sum(yssT))
-          print('zssT', np.sum(zssT))
-         
-          A_XT = (D_1.T * fib.xs[:,0]).T
-          A_YT = (D_1.T * fib.xs[:,1]).T
-          A_ZT = (D_1.T * fib.xs[:,2]).T
-         
-          xsTs = A_XT * fib.tension
-          ysTs = A_YT * fib.tension
-          zsTs = A_ZT * fib.tension 
-          
-          print('xssT', xsTs)
-          print('yssT', ysTs)
-          print('zssT', zsTs)
-          
-          print('xssT', np.sum(xsTs))
-          print('yssT', np.sum(ysTs))
-          print('zssT', np.sum(zsTs)) 
+          #print('Xssss', fib.xssss)
+         # print('Sum-xssss', np.sum(fib.xssss[:,0]))
+         # print('Sum-yssss', np.sum(fib.xssss[:,1]))
+         # print('Sum-zssss', np.sum(fib.xssss[:,2]))
           
         # VELOCITY DUE TO BODIES
         if bodies:

@@ -375,11 +375,30 @@ def initialize_from_file(input_file,options,prams):
                         viscosity = prams.eta)
       fib.ID = 'fibers'
       fib.x = fib_x
-      fib.nuc_site_idx = int(i)
       fib.attached_to_body = None
       fibers.append(fib)
       offset += num_points
-        
+  if False:
+    s = np.linspace(0, 2, options.num_points)
+    axis_s = np.empty((s.size, 3))
+    axis_s[:,0] = -1
+    axis_s[:,1] = 1
+    axis_s[:,2] = s*prams.fiber_length/2# - prams.fiber_length/2
+
+    fib = fiber.fiber(num_points = options.num_points,
+                      num_points_max = options.num_points_max,
+                      num_points_finite_diff = options.num_points_finite_diff,
+                      dt = options.dt,
+                      E = prams.Efib,
+                      length = prams.fiber_length,
+                      adaptive_num_points = options.adaptive_num_points,
+                      viscosity = prams.eta)
+    fib.ID = 'fibers'
+    fib.x = axis_s
+    fib.attached_to_body = None
+    fibers.append(fib)
+
+
   # Set some more variables
   fibers_names.append('fibers')
   fibers_types.append(len(fibers))
