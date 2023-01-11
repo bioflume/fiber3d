@@ -686,7 +686,7 @@ class tstep(object):
     # 1.3. External forces
     force_bodies = np.zeros((len(self.bodies),6))
     force_fibers = np.zeros((offset_fibers[-1],3))
-    force_fibers[:,2] = -2
+    force_fibers[:,1] = 1
     #force_bodies[0,2] = 1.0
 
     motor_force_fibers = np.zeros((offset_fibers[-1],3))
@@ -1431,7 +1431,14 @@ class tstep(object):
                       normals_blobs, self.normals_shell,
                       As_fibers, As_BC, Gfibers, fibs, trg_fib,
                       fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = K_bodies)
-      print('external force', force_fibers)
+      fib_mat = self.fib_mats[0]
+      fib = self.fibers[0]
+      weights, weights_up, out3, out4 = fib_mat.get_matrices(fib.length_previous, fib.num_points_up, 'weights_all')
+      fw_ext = force_fibers * weights[:,None]
+      print('Sum_external_x', np.sum(fw_ext[:,0]))
+      print('Sum_external_y', np.sum(fw_ext[:,1]))
+      print('Sum_external_z', np.sum(fw_ext[:,2]))
+
       input()
       if force_fibers.any():
         vfib2cube = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,

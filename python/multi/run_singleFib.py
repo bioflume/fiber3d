@@ -50,10 +50,10 @@ if __name__ == '__main__':
   Nbody = 800
   
   precompute_body_PC = True
-  dt = 2.5E-3
-  dt_max = 2.5E-3
+  dt = 2.5E-4
+  dt_max = 2.5E-4
   num_points_max = 256
-  Nfiber = 32
+  Nfiber = 128
   
 
   # SIMULATION'S OPTIONS AND PARAMETERS

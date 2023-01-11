@@ -13,6 +13,7 @@ import argparse
 import subprocess
 import time
 from scipy.interpolate import interp1d
+import scipy.integrate as spi
 try:
   import cPickle as cpickle
 except:
@@ -36,6 +37,7 @@ while found_functions is False:
     from utils import nonlinear
     from utils import cheb
     from utils import barycentricMatrix as bary
+    from utils import finite_diff
     from fiber import fiber
     from kernels import kernels
     from body import body
@@ -354,7 +356,7 @@ def initialize_from_file(input_file,options,prams):
     b.ID = 'body'
     bodies.append(b)
   
-  if True:
+  if False:
     fibers_info, fibers_coor = read_fibers_file.read_fibers_file(prams.resume_fiber_file)
     # Create each fiber structure of type structure 
     offset = 0
@@ -378,7 +380,26 @@ def initialize_from_file(input_file,options,prams):
       fib.attached_to_body = None
       fibers.append(fib)
       offset += num_points
-  if False:
+  if True:
+    #t = np.arange(0,options.num_points)/options.num_points
+    #t = np.linspace(0,1,options.num_points)
+    #axis_s = np.empty((t.size, 3))
+    #axis_s[:,0] = np.cos(t*np.pi)
+    #axis_s[:,1] = np.sin(t*np.pi)
+    
+    #D = finite_diff.finite_diff(t,1,options.num_points_finite_diff+1)
+    #x_a = np.dot(D[:,:,1],axis_s)
+    #integrand = np.sqrt(axis_s[:,0]**2 + axis_s[:,1]**2 + axis_s[:,2]**2)
+    #arc_length = np.zeros_like(integrand)
+    #alpha = np.linspace(-1,1,integrand.size)
+    #for k in range(integrand.size):
+    #  if k == integrand.size-1:
+    #    arc_length[k] = spi.trapz(integrand, t)
+    #  else:
+    #    arc_length[k] = spi.trapz(integrand[:k+1], t[:k+1])
+    #prams.fiber_length = arc_length[-1]
+    print('Fiber_length = ', prams.fiber_length)
+
     s = np.linspace(0, 2, options.num_points)
     axis_s = np.empty((s.size, 3))
     axis_s[:,0] = -1
