@@ -5,11 +5,13 @@ from tstep import tstep_sphere as tstep
 from tstep import initialize_sphere as initialize
 
 if __name__ == '__main__':
-  body_shape = 'sphere'
-  body_r = 2 # largest radius
-  
-  filename = '/work2/03353/gokberk/frontera/rigid2um/run'
-
+  body_shape = 'ellipsoid'
+  body_r = None # largest radius
+  body_a = 2
+  body_b = 4
+  body_c = 2
+  filename = '/work2/03353/gokberk/frontera/perpEllipsoid/run'
+ # perpEllipsoid
   random_seed = 32
   time_step_scheme = 'time_step_hydro'
   Nbody = 200
@@ -54,7 +56,10 @@ if __name__ == '__main__':
       final_time = 250,
       fiber_body_attached = False,
       body_shape = body_shape,
-      body_r = body_r)
+      body_r = body_r,
+      body_a = body_a,
+      body_b = body_b,
+      body_c = body_c)
 
   # Create time stepping scheme
   tstep = tstep.tstep(prams,options,None,None,None,None)
