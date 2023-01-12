@@ -44,17 +44,17 @@ if __name__ == '__main__':
   filename = '/work2/03353/gokberk/frontera/flagellaRuns/test6/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
-  ncompute_vel = 1#1000
+  ncompute_vel = 1000
 
   random_seed = 32
   time_step_scheme = 'time_step_hydro'
-  Nbody = 800
+  Nbody = 1000
   
   precompute_body_PC = True
   dt = 2.5E-3
   dt_max = 2.5E-3
   num_points_max = 256
-  Nfiber = 32
+  Nfiber = 64
   
 
   # SIMULATION'S OPTIONS AND PARAMETERS
