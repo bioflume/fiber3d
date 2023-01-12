@@ -7,13 +7,13 @@ from tstep import initialize
 if __name__ == '__main__':
   clamp_oscil_mag = np.pi/6
   clamp_oscil_k = 1
-  clamp_oscil_speed = 0#0.05
+  clamp_oscil_speed = 0.05
   body_shape = 'ellipsoid'
   body_a = 2
   body_b = 2
   body_c = 4 # largest radius
   velMeasureRad = 2 * (2*body_c) # velocity on a shell of radius r = 2 * b, b: the largest diameter of the swimmer 
-  velMeasureP = 16 # Chebyshev orderks
+  velMeasureP = 32 # Chebyshev orderks
   num_fibers = 175
   fiber_position = None
   #fiber_position = []
@@ -41,10 +41,10 @@ if __name__ == '__main__':
     info = np.loadtxt(fname, dtype = np.float64)
     resume_from_time += info[-1,1]
   
-  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test5_resume_test/run'
+  filename = '/work2/03353/gokberk/frontera/flagellaRuns/test6/run'
   # INPUT FILE: includes fiber, molecular motor parameters and files to read fiber, body, mm configs
   iComputeVelocity = True
-  ncompute_vel = 1
+  ncompute_vel = 1#1000
 
   random_seed = 32
   time_step_scheme = 'time_step_hydro'
@@ -72,7 +72,7 @@ if __name__ == '__main__':
                                   dt_max = dt_max,
                                   tol_tstep = 1e-1,
                                   tol_gmres = 1e-10,
-                                  n_save = 1,
+                                  n_save = ncompute_vel,
                                   output_name=filename,
                                   save_file = None,
                                   precompute_body_PC = precompute_body_PC,

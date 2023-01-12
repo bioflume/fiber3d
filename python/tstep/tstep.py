@@ -1545,7 +1545,17 @@ class tstep(object):
       # Save velocity and the grid points
       grid_cube = grid_cube.reshape((grid_cube.size//3,3))
       grid_cheb = grid_cheb.reshape((grid_cheb.size//3,3))
+      
+      location_old, orientation_old = self.bodies[0].location, self.bodies[0].orientation
+      self.bodies[0].location = np.copy(self.bodies[0].location_new)
+      self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
        
+      vgrid_cheb = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cheb,0,translate=False)
+      vgrid_cube = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cube,0,translate=False)
+      
+      self.bodies[0].location = location_old
+      self.bodies[0].orientation = orientation_old 
+      
       name = self.output_name + 'cheb_grid_at_step' + str(self.step_now) + '.txt'
       f_grid = open(name, 'w')
       np.savetxt(f_grid,grid_cheb)

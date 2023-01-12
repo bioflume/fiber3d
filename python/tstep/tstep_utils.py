@@ -97,7 +97,7 @@ def distribute_equally_spaced(fibers):
 
   return fibers
 ##############################################################################################
-def get_vectors_frame_body(bodies, r_grid, frame_body):
+def get_vectors_frame_body(bodies, r_grid, frame_body,translate=True):
   '''
   Get grid in the frame of reference of one body if frame_body >= 0.
   If frame_body < 0 use the lab frame of reference, i.e. do not translate or rotate anything.
@@ -121,7 +121,9 @@ def get_vectors_frame_body(bodies, r_grid, frame_body):
     location0 = bodies[frame_body].location
 
     for i, ri in enumerate(r_grid):
-      r_grid_frame[i] = np.dot(R0.T, ri) + location0
+      r_grid_frame[i] = np.dot(R0.T, ri) 
+      if translate:
+        r_grid_frame[i] += location0
     
 
   else:
