@@ -137,7 +137,13 @@ class set_parameters(object):
                v_growth = 0.75,
                scale_vg = 0.75,
                body_viscosity_scale = 1,
-               compute_steps = None):
+               compute_steps = None,
+               body_shape = None,
+               body_a = None,
+               body_b = None,
+               body_c = None,
+               body_r = None,
+               velMeasureP = None):
     # FLOW PARAMETERS
     self.nucleating_site_file = nucleating_site_file
     self.bodies_file = bodies_file
@@ -161,16 +167,21 @@ class set_parameters(object):
     self.v_growth = v_growth
     self.scale_vg = scale_vg
     self.body_viscosity_scale = body_viscosity_scale
-
+    self.body_shape = body_shape
+    self.body_a = body_a
+    self.body_b = body_b
+    self.body_c = body_c
+    self.body_r = body_r
+    self.velMeasureP = velMeasureP
 def initialize_from_file(options,prams):
   '''
   Read data from input files, initialize fibers, bodies and molecular motors
   '''
 
   # Load the link file
-  spring_constants, spring_constants_angle, links_location, axes = read_links_file.read_links_file(prams.nucleating_site_file)
+  links_location = np.loadtxt(prams.nucleating_site_file, dtype = np.float64)
   lin = links_location[0]
-  body_radius = np.sqrt(lin[0]**2 + lin[1]**2 + lin[2]**2)
+  
   # Create body_fibers
   time_steps = []
 
@@ -210,10 +221,8 @@ def initialize_from_file(options,prams):
       struct_ref_config = np.array([0, 0, 0])
       ibody = body.Body(xyz_body, orientation, struct_ref_config, struct_ref_config, np.ones(struct_ref_config.size // 3))
       ibody.ID = 'centrosome'
-      ibody.radius = body_radius
       ibody.nuc_sites = links_location
       ibody.active_sites_idcs = []
-      ibody.quadrature_radius = options.body_quadrature_radius
       if idFile == 0:
         bodies.append(ibody)
       else:
@@ -255,10 +264,7 @@ def initialize_from_file(options,prams):
                                viscosity = prams.eta)
           ifiber.ID = 'centrosome'
           ifiber.x = xyz_fib
-          ifiber.length_0 = 0.5
-          ifiber.num_points_0 = options.num_points
           ifiber.attached_to_body = 0
-          ifiber.iReachSurface = False
           ifiber.nuc_site_idx = nuc_site_idx
           active_sites_idcs.append(nuc_site_idx)
           if idFile == 0:

@@ -10,10 +10,16 @@ import copy
 import stkfmm
 import os
 
+try:
+  from pyevtk.hl import gridToVTK
+except ImportError:
+  pass
+from visit import visit_writer
+
 from scipy.spatial import ConvexHull
 
 # OUR CLASSES
-from tstep import tstep_utils_new as tstep_utils
+from tstep import tstep_utils
 from bpm_utilities import gmres
 #from bpm_utilities import gmres
 from utils import nonlinear
@@ -48,9 +54,10 @@ class postprocess_velocity(object):
 
 
   ##############################################################################################
-  def __init__(self, prams, options, time_steps, nsteps_all, time_all):
+  def __init__(self, prams, options, time_steps, nsteps_all, time_all,nskip):
     self.options = options
     self.nsteps_all = nsteps_all
+    self.nskip = nskip
     self.time_all = time_all
     self.prams = prams
     self.time_steps = time_steps
@@ -63,8 +70,6 @@ class postprocess_velocity(object):
     self.dt = options.dt # if not adaptive time stepping
     self.compute_steps = prams.compute_steps
     self.tol_gmres = options.tol_gmres # gmres tolerance
-    self.iCytoPulling = options.iCytoPulling # Cytoplasmic pulling flag
-    self.iNoSliding = options.iNoSliding
 
     self.scale_nuc2fib = prams.scale_nuc2fib # repulsion strength for nucleus-fiber interaction
     self.scale_nuc2bdy = prams.scale_nuc2bdy # repulsion strength for nucleus-body interaction
@@ -82,6 +87,13 @@ class postprocess_velocity(object):
     self.stresslet_kernel_source_target_stkfmm_partial = None
     self.uprate = options.uprate
 
+    self.body_shape = prams.body_shape
+    self.body_a = prams.body_a
+    self.body_b = prams.body_b
+    self.body_c = prams.body_c
+    self.body_r = prams.body_r
+    self.velMeasureP = prams.velMeasureP
+    
     if self.useFMM:
       self.write_message('FMM is in use:')
       self.write_message('FMM order: ' + str(options.fmm_order))
@@ -109,13 +121,57 @@ class postprocess_velocity(object):
     self.beta, self.Xcoeff, self.rhsCoeff = 1.0, [1.0], [1.0]
     # OPEN A FILE TO KEEP LOGS
     f_log = open(self.output_name + '_postprocessing.logFile', 'w+')
+    if prams.body_shape == 'ellipsoid':
+      max_size = np.max([prams.body_a, prams.body_b, prams.body_c]) # max radius
+      Lcube = 3*(2*max_size) # 3 * max_diameter
+      Ncube = 100
+      grid_length = Lcube
+      grid_points = np.array([Ncube, Ncube, Ncube], dtype=np.int32)
+      num_points = grid_points[0]*grid_points[1]*grid_points[2]
+      dx_grid = grid_length/grid_points
+      grid_x = np.array([-Lcube/2 + dx_grid[0] * (x+0.5) for x in range(grid_points[0])])
+      grid_y = np.array([-Lcube/2 + dx_grid[1] * (x+0.5) for x in range(grid_points[1])])
+      grid_z = np.array([-Lcube/2 + dx_grid[2] * (x+0.5) for x in range(grid_points[2])])
+      
+      zz, yy, xx = np.meshgrid(grid_z, grid_y, grid_x, indexing = 'ij')
+      self.ref_grid_cube = np.zeros((num_points, 3))
+      self.ref_grid_cube[:,0] = np.reshape(xx, xx.size)
+      self.ref_grid_cube[:,1] = np.reshape(yy, yy.size)
+      self.ref_grid_cube[:,2] = np.reshape(zz, zz.size)
 
+      grid_x = grid_x - dx_grid[0] * 0.5
+      grid_y = grid_y - dx_grid[1] * 0.5
+      grid_z = grid_z - dx_grid[2] * 0.5
+      gridEnd = np.array([Lcube/2])
+      self.ref_edges_cube = np.zeros((Ncube+1,3))
+      self.ref_edges_cube[:,0] = np.concatenate([grid_x,[gridEnd[0]]])
+      self.ref_edges_cube[:,1] = np.concatenate([grid_y,[gridEnd[0]]])
+      self.ref_edges_cube[:,2] = np.concatenate([grid_z,[gridEnd[0]]])
+      
+      self.ref_edges_cube_x = np.concatenate([grid_x,[gridEnd[0]]])
+      self.ref_edges_cube_y = np.concatenate([grid_y,[gridEnd[0]]]) 
+      self.ref_edges_cube_z = np.concatenate([grid_z,[gridEnd[0]]])
+      
+      name = options.output_name + '_ref_cheb_grid.txt'
+      with open(name, 'w') as f:
+        np.savetxt(f, self.ref_grid_cheb)
+        f.close()
+    
+      name = options.output_name + '_ref_cube_grid.txt'
+      with open(name, 'w') as f:
+        np.savetxt(f, self.ref_grid_cube)
+        f.close()
+      
     # If Nblobs is given, then discretize rigid bodies with given Nblobs
     self.A_inv_bodies = []
     if options.Nblobs is not None:
       self.bodies = self.time_steps[0].bodies
       Nblobs = options.Nblobs
-      self.bodies[0].discretize_body_surface(shape = 'sphere', Nblobs = Nblobs, radius = self.bodies[0].quadrature_radius)
+      if prams.body_shape == 'sphere':
+        self.bodies[0].discretize_body_surface(shape = prams.body_shape, Nblobs = Nblobs, radius = 1/1.04 * prams.body_r)
+      elif prams.body_shape == 'ellipsoid':
+        self.bodies[0].discretize_body_ellipsoid(shape = prams.body_shape, Nblobs = Nblobs, a = prams.body_a/1.04, b = prams.body_b/1.04, c = prams.body_c/1.04)
+      
 
       body_config = self.bodies[0].get_r_vectors_surface()
       body_norms = self.bodies[0].get_normals()
@@ -222,7 +278,7 @@ class postprocess_velocity(object):
     '''
 
     # START TAKING TIME STEPS
-    for istep in self.compute_steps:
+    for istep in np.arange(self.nsteps_all[0],self.nsteps_all[-1]+self.nskip,self.nskip):
       # index in time_step container
       idx = np.where(self.nsteps_all == istep)
       idx = idx[0][0]
@@ -267,15 +323,6 @@ class postprocess_velocity(object):
       periphery_a = self.periphery_a
       periphery_b = self.periphery_b
       periphery_c = self.periphery_c
-
-    # CORTICAL PUSHING
-    self.fibers = tstep_utils.no_sliding_cortical_pushing(self.fibers, cortex_a = self.periphery_a, cortex_b = self.periphery_b,
-      cortex_c = self.periphery_c, cortex_radius = self.periphery_radius)
-
-    # Dynamic instability
-    self.fibers, self.bodies = tstep_utils.dynamic_instability_v4(self.fibers, self.bodies, self.prams, self.options, self.dt)
-
-
 
     # ------------------
     # 1. INITIALIZATION
@@ -346,14 +393,6 @@ class postprocess_velocity(object):
       force_fibers += rep_force_fibers
 
     motor_force_fibers = np.zeros((offset_fibers[-1],3))
-
-    linSpring = 1000
-    rotSpring = 1000
-    force_bodies[0,:3] += - linSpring * self.bodies[0].location
-    rot_angle = self.bodies[0].orientation.rotation_angle()
-    if not np.isnan(rot_angle).any():
-      force_bodies[0,3:5]+= - rotSpring * rot_angle[:2]
-
     # ---------------------------------------------------
     # 2. BLOCK DIAGONAL MATRICES AND RHSs FOR FIBERS
     # ---------------------------------------------------
@@ -845,48 +884,25 @@ class postprocess_velocity(object):
     # -------------------------------------------------
 
     if True:
-      ngrid_points = 500
-      peri_a = self.periphery_a
-      peri_b = self.periphery_b
-      peri_c = self.periphery_c
-      ellips_b = self.periphery_b - 1.5
-      ellips_c = 8
-      stepdx = 1
-      stepdz = 2
-      xrange_1, xrange_2 = -ellips_b, ellips_b+stepdx
-      yrange_1, yrange_2 = -ellips_b, ellips_b+stepdx
-      zrange_1, zrange_2 = -ellips_c, ellips_c+stepdz
+      location_old, orientation_old = np.copy(self.bodies[0].location), copy.copy(self.bodies[0].orientation)
+      self.bodies[0].location = np.copy(self.bodies[0].location_new)
+      self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
+      
+      grid_cheb = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cheb, 0)
+      grid_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cube, 0)
+      
+      self.bodies[0].location = location_old
+      self.bodies[0].orientation = orientation_old
 
-      xdepth = np.arange(xrange_1, xrange_2, stepdx)
-      yrange = np.arange(yrange_1, yrange_2, stepdx)
-      zrange = np.arange(zrange_1, zrange_2, stepdz)
-
-      xv, yv, zv = np.meshgrid(xdepth,yrange,zrange,sparse=False,indexing='ij')
-      xv = xv.flatten()
-      yv = yv.flatten()
-      zv = zv.flatten()
-
-      xin, yin, zin = [], [], []
-      for ij in range(yv.size):
-        if np.sqrt(xv[ij]**2/peri_a**2 + yv[ij]**2 /peri_b**2 + zv[ij]**2 / peri_c**2) <= 0.99:
-          xin.append(xv[ij])
-          yin.append(yv[ij])
-          zin.append(zv[ij])
-
-
-
-      xin, yin, zin = np.array(xin), np.array(yin), np.array(zin)
-      #xin = np.zeros_like(yin)
-      xin, yin, zin = xin.reshape((xin.size,1)), yin.reshape((yin.size,1)), zin.reshape((zin.size,1))
-      grid_points = np.concatenate((xin, yin, zin), axis = 1)
-
-      grid_points = grid_points.flatten()
+      grid_cheb = grid_cheb.flatten()
+      grid_cube = grid_cube.flatten()
+    
 
       def compute_velocity(x_all, bodies, shell,
                         trg_bdy_surf, trg_bdy_cent, trg_shell_surf,
                         normals_blobs, normals_shell,
                         As_fibers, As_BC, Gfibers, fibers, trg_fib,
-                        fibers_force_operator, xfibers, grid_points, K_bodies = None):
+                        fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = None):
 
 
         # Extract shell density
@@ -920,32 +936,13 @@ class postprocess_velocity(object):
         # VELOCITY DUE TO BODIES
         if bodies:
           # Due to hydrodynamic density
-          vbdy2all = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, grid_points, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
-          vbdy2fib = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, trg_fib, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
-          vbdy2bdy_stresslet = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, trg_bdy_surf, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
-
-          if np.isnan(vbdy2all).any():
+          vbdy2cheb = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, grid_cheb, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
+          vbdy2cube = kernels.stresslet_kernel_source_target_numba(trg_bdy_surf, grid_cube, normals_blobs, body_densities, eta = bodies[0].viscosity_scale*self.eta)
+          
+          if np.isnan(vbdy2cheb).any() or np.isnan(vbdy2cube).any():
             print('body to grid has non')
 
           if fibers:
-
-            force_hinged = np.zeros((len(bodies),3))
-            torque_hinged = np.zeros((len(bodies),3))
-            force_free = np.zeros((len(bodies),3))
-            torque_free = np.zeros((len(bodies),3))
-
-            for k, fib in enumerate(fibers):
-              mt_force, mt_torque = tstep_utils.get_link_force_torque(bodies, fib, self.fib_mats, self.fib_mat_resolutions)
-              fib.force_on_body = mt_force
-              fib.torque_on_body = mt_torque
-
-              if fib.iReachSurface:
-                force_hinged += mt_force
-                torque_hinged += mt_torque
-              else:
-                force_free += mt_force
-                torque_free += mt_torque
-
             # Torque and force due to fiber-body link
             body_vel_xt = np.concatenate((body_velocities.flatten(),XT.flatten()), axis=0)
             y_BC = As_BC.dot(body_vel_xt)
@@ -954,272 +951,155 @@ class postprocess_velocity(object):
               force_bodies[k,:] = y_BC[6*k : 6*k+3]
               torque_bodies[k,:] = y_BC[6*k+3 : 6*k+6]
             # Due to forces and torques
-            vbdy2all_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_points, force_bodies, eta = bodies[0].viscosity_scale*self.eta)
-            vbdy2fib += kernels.oseen_kernel_source_target_numba(trg_bdy_cent, trg_fib, force_bodies, eta = bodies[0].viscosity_scale*self.eta)
-
-            vbdy2bdy_hinged_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, trg_bdy_surf, force_hinged, eta = bodies[0].viscosity_scale*self.eta)
-            vbdy2bdy_free_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, trg_bdy_surf, force_free, eta = bodies[0].viscosity_scale*self.eta)
-
-            if np.isnan(vbdy2all_force).any():
+            vbdy2cube_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cube, force_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            vbdy2cheb_force = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cheb, force_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            
+            if np.isnan(vbdy2cube_force).any() or np.isnan(vbdy2cheb_force).any():
               print('body to grid (oseen) has nan')
+              
 
-            vbdy2all_force += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_points, torque_bodies, eta = bodies[0].viscosity_scale*self.eta)
-            vbdy2fib += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, trg_fib, torque_bodies, eta = bodies[0].viscosity_scale*self.eta)
-
-            vbdy2bdy_hinged_torque = kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, trg_bdy_surf, torque_hinged, eta = bodies[0].viscosity_scale*self.eta)
-            vbdy2bdy_free_torque = kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, trg_bdy_surf, torque_free, eta = bodies[0].viscosity_scale*self.eta)
-
-            if np.isnan(vbdy2all_force).any():
+            vbdy2cheb_force += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cheb, torque_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            vbdy2cube_force += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cube, torque_bodies, eta = bodies[0].viscosity_scale*self.eta)
+            if np.isnan(vbdy2cheb_force).any() or np.isnan(vbdy2cube_force).any():
               print('body to grid (rotlet) has nan')
-            vbdy2all += vbdy2all_force
+            vbdy2cheb += vbdy2cheb_force
+            vbdy2cube += vbdy2cube_force
         else:
           y_BC = np.zeros(len(bodies)*6 + offset_fibers[-1]*4)
-          vbdy2all = np.zeros_like(grid_points)
+          vbdy2cheb = np.zeros_like(grid_cheb)
+          vbdy2cube = np.zeros_like(grid_cube)
 
         # VELOCITY DUE TO FIBERS
         if fibers:
-          vfib2all = tstep_utils.flow_fibers(fw, trg_fib, grid_points, self.fibers, offset_fibers, self.eta, integration = self.integration ,
-            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = True, oseen_fmm = None, fmm_max_pts = 500)
-          vfib2fib = tstep_utils.flow_fibers(fw, trg_fib, trg_fib, self.fibers, offset_fibers, self.eta, integration = self.integration ,
-            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = True, oseen_fmm = None, fmm_max_pts = 500)
-          vfib2fib += tstep_utils.self_flow_fibers(fw, offset_fibers, self.fibers, Gfibers, self.eta, integration = self.integration,
-                    fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = True)
-          vfib2bdy = tstep_utils.flow_fibers(fw, trg_fib, trg_bdy_surf, self.fibers, offset_fibers, self.eta, integration = self.integration ,
-            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = True, oseen_fmm = None, fmm_max_pts = 500)
-
-          grid_off = 0
-          grid_points_mat = grid_points.reshape((grid_points.size//3,3))
-          for xyz in grid_points_mat:
-            for k,fib in enumerate(self.fibers):
-              dist = np.sqrt((xyz[0]-fib.x[:,0])**2 + (xyz[1]-fib.x[:,1])**2 + (xyz[2]-fib.x[:,2])**2)
-              if False: #(dist<=2e-1).any() :
-                indx = np.where(self.fib_mat_resolutions == fib.num_points)
-                indx = indx[0][0]
-                P_kerUp, P_kerDn, out3, out4 = self.fib_mats[indx].get_matrices(fib.length, fib.num_points_up, 'P_kernel')
-                weights, weights_up, out3, out4 = self.fib_mats[indx].get_matrices(fib.length, fib.num_points_up, 'weights_all')
-                fup = np.dot(P_kerUp, fw[offset_fibers[k]:offset_fibers[k+1]]) * weights_up[:,None]
-                G = kernels.oseen_tensor_source_target(np.dot(P_kerUp,fib.x), fib.x, eta = self.eta)
-                vself = G.dot(fup.flatten())
-                vself = vself.reshape((vself.size//3,3))
-                #vinter[0] = scinter.griddata(fib.x,vself[:,0],xyz.reshape((1,3)),method='linear')
-                #vinter[1] = scinter.griddata(fib.x,vself[:,1],xyz.reshape((1,3)),method='linear')
-                #vinter[2] = scinter.griddata(fib.x,vself[:,2],xyz.reshape((1,3)),method='linear')
-                minIdx = np.argmin(dist)
-                vinter = vself[minIdx]
-                vfib2all[grid_off:grid_off+3] = vinter.flatten()
-            grid_off += 3
-
+          vfib2cheb = tstep_utils.flow_fibers(fw, trg_fib, grid_cheb, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
+          vfib2cube = tstep_utils.flow_fibers(fw, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
         else:
-          vfib2all = np.zeros_like(grid_points)
-        if np.isnan(vfib2all).any():
+          vfib2cheb = np.zeros_like(grid_cheb)
+          vfib2cube = np.zeros_like(grid_cube)
+          
+        if np.isnan(vfib2cube).any() or np.isnan(vfib2cheb).any():
           print('fiber to grid has nan')
 
         # VELOCITY DUE TO SHELL
         if shell is not None:
           # Shell to body and fiber
-          vshell2all = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, grid_points, normals_shell, shell_density, eta = self.eta)
-          vshell2fib = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, trg_fib, normals_shell, shell_density, eta = self.eta)
-          vshell2bdy = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, trg_bdy_surf, normals_shell, shell_density, eta = self.eta)
+          vshell2cheb = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, grid_cheb, normals_shell, shell_density, eta = self.eta)
+          vshell2cube = kernels.stresslet_kernel_source_target_numba(trg_shell_surf, grid_cube, normals_shell, shell_density, eta = self.eta)
         else:
-          vshell2all = np.zeros_like(grid_points)
+          vshell2cube = np.zeros_like(grid_cube)
+          vshell2cheb = np.zeros_like(grid_cheb)
 
-        if np.isnan(vshell2all).any():
+        if np.isnan(vshell2cube).any() or np.isnan(vshell2cheb).any():
           print('shell to grid has nan')
 
-        vgrid = vshell2all.reshape((vshell2all.size//3,3)) + vbdy2all.reshape((vbdy2all.size//3, 3)) + vfib2all.reshape((vfib2all.size//3, 3))
-        vfib_all = vfib2fib.reshape((vfib2fib.size//3,3)) + vshell2fib.reshape((vshell2fib.size//3,3)) + vbdy2fib.reshape((vbdy2fib.size//3, 3))
-        vfib_self = np.zeros_like(vfib_all)
-        vfib_pol = np.zeros_like(vfib_all)
-        for k, fib in enumerate(self.fibers):
-          M = fib.self_mobility()
-          force_all = np.zeros(fib.num_points*3)
-          force_all[0: fib.num_points] = fw[offset_fibers[k]:offset_fibers[k+1],0]
-          force_all[fib.num_points: 2*fib.num_points] = fw[offset_fibers[k]:offset_fibers[k+1],1]
-          force_all[2*fib.num_points: 3*fib.num_points] = fw[offset_fibers[k]:offset_fibers[k+1],2]
-          Mf = np.dot(M, force_all)
-          vfib_self[offset_fibers[k]:offset_fibers[k+1],0] = Mf[0:fib.num_points]
-          vfib_self[offset_fibers[k]:offset_fibers[k+1],1] = Mf[fib.num_points:2*fib.num_points]
-          vfib_self[offset_fibers[k]:offset_fibers[k+1],2] = Mf[2*fib.num_points:3*fib.num_points]
+        vgrid_cube = vshell2cube.reshape((vshell2cube.size//3,3)) + vbdy2cube.reshape((vbdy2cube.size//3, 3)) + vfib2cube.reshape((vfib2cube.size//3, 3))
+        vgrid_cheb = vshell2cheb.reshape((vshell2cheb.size//3,3)) + vbdy2cheb.reshape((vbdy2cheb.size//3, 3)) + vfib2cheb.reshape((vfib2cheb.size//3, 3))
+        return vgrid_cube, vgrid_cheb
 
-          alpha = np.linspace(-1,1,fib.num_points)
-          vfib_pol[offset_fibers[k]:offset_fibers[k+1],0] = (alpha+1)/2 * fib.v_length * fib.xs[:,0]
-          vfib_pol[offset_fibers[k]:offset_fibers[k+1],1] = (alpha+1)/2 * fib.v_length * fib.xs[:,1]
-          vfib_pol[offset_fibers[k]:offset_fibers[k+1],2] = (alpha+1)/2 * fib.v_length * fib.xs[:,2]
-
-
-
-
-        return vgrid, vfib_all, vfib_self, vfib_pol, force_hinged, torque_hinged, force_free, torque_free, vbdy2bdy_stresslet, vbdy2bdy_free_force, vbdy2bdy_free_torque, vbdy2bdy_hinged_force, vbdy2bdy_hinged_torque, vfib2bdy, vshell2bdy, fw
-
-
-    if True:
-      vgrid, vfib_all, vfib_self, vfib_pol, force_hinged, torque_hinged, force_free, torque_free, vbdy2bdy_stresslet, vbdy2bdy_free_force, vbdy2bdy_free_torque, vbdy2bdy_hinged_force, vbdy2bdy_hinged_torque, vfib2bdy_in, vshell2bdy_in, force_density = compute_velocity(sol, self.bodies, self.shell,
+      vgrid_cube, vgrid_cheb = compute_velocity(sol, self.bodies, self.shell,
                       trg_bdy_surf, trg_bdy_cent, self.trg_shell_surf,
                       normals_blobs, self.normals_shell,
-                      As_fibers, As_BC, GfibersNoFMM, self.fibers, trg_fib,
-                      fibers_force_operator, xfibers, grid_points, K_bodies = K_bodies)
-      vfib2fib = np.zeros_like(vfib_all)
-      vbdy2fib = np.zeros_like(vfib_all)
-      vfib_self2 = np.zeros_like(vfib_all)
-      if force_fibers.any():
-        vfib2grid = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_points, self.fibers, offset_fibers, self.eta, integration = self.integration ,
-            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
-        vfib2fib = tstep_utils.flow_fibers(force_fibers, trg_fib, trg_fib, self.fibers, offset_fibers, self.eta, integration = self.integration ,
-            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
-        vfib2fib += tstep_utils.self_flow_fibers(force_fibers, offset_fibers, self.fibers, GfibersNoFMM, self.eta, integration = self.integration,
-                  fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = True)
-        vgrid += vfib2grid.reshape((vfib2grid.size//3,3))
-        self.write_message('There is force_fiber causing vgrid')
-        for k, fib in enumerate(self.fibers):
-          M = fib.self_mobility()
-          force_all = np.zeros(fib.num_points*3)
-          force_all[0: fib.num_points] = force_fibers[offset_fibers[k]:offset_fibers[k+1],0]
-          force_all[fib.num_points: 2*fib.num_points] = force_fibers[offset_fibers[k]:offset_fibers[k+1],1]
-          force_all[2*fib.num_points: 3*fib.num_points] = force_fibers[offset_fibers[k]:offset_fibers[k+1],2]
-          Mf = np.dot(M, force_all)
-          vfib_self2[offset_fibers[k]:offset_fibers[k+1],0] = Mf[0:fib.num_points]
-          vfib_self2[offset_fibers[k]:offset_fibers[k+1],1] = Mf[fib.num_points:2*fib.num_points]
-          vfib_self2[offset_fibers[k]:offset_fibers[k+1],2] = Mf[2*fib.num_points:3*fib.num_points]
+                      As_fibers, As_BC, Gfibers, self.fibers, trg_fib,
+                      fibers_force_operator, xfibers, grid_cheb, grid_cube, K_bodies = K_bodies)
 
+      if force_fibers.any():
+        vfib2cube = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cube, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
+        vfib2cheb = tstep_utils.flow_fibers(force_fibers, trg_fib, grid_cheb, self.fibers, offset_fibers, self.eta, integration = self.integration ,
+            fib_mats = self.fib_mats, fib_mat_resolutions = self.fib_mat_resolutions, iupsample = self.iupsample, oseen_fmm = None, fmm_max_pts = 500)
+        vgrid_cube += vfib2cube.reshape((vfib2cube.size//3,3))
+        vgrid_cheb += vfib2cheb.reshape((vfib2cheb.size//3,3))
+        
+        self.write_message('There is force_fiber causing vgrid')
 
       if force_bodies.any():
-        vbdy2grid = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_points, force_bodies[:,:3], eta = self.bodies[0].viscosity_scale*self.eta)
-        vbdy2fib = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, trg_fib, force_bodies[:,:3], eta = self.bodies[0].viscosity_scale*self.eta)
-        if np.isnan(vbdy2grid).any():
+        vbdy2cube = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cube, force_bodies[:,:3], eta = self.bodies[0].viscosity_scale*self.eta)
+        vbdy2cheb = kernels.oseen_kernel_source_target_numba(trg_bdy_cent, grid_cheb, force_bodies[:,:3], eta = self.bodies[0].viscosity_scale*self.eta)
+        if np.isnan(vbdy2cube).any() or np.isnan(vbdy2cheb).any():
           print('body to grid (external force) has nan')
-        vbdy2grid += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_points, force_bodies[:,3:], eta = self.bodies[0].viscosity_scale*self.eta)
-        vbdy2fib += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, trg_fib, force_bodies[:,3:], eta = self.bodies[0].viscosity_scale*self.eta)
-        if np.isnan(vbdy2grid).any():
+        vbdy2cube += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cube, force_bodies[:,3:], eta = self.bodies[0].viscosity_scale*self.eta)
+        vbdy2cheb += kernels.rotlet_kernel_source_target_numba(trg_bdy_cent, grid_cheb, force_bodies[:,3:], eta = self.bodies[0].viscosity_scale*self.eta)
+        if np.isnan(vbdy2cheb).any() or np.isnan(vbdy2cube).any():
           print('body to grid (external toruq) has nan')
-        vgrid += vbdy2grid.reshape((vbdy2grid.size//3,3))
-
-      grid_points = grid_points.reshape((grid_points.size//3,3))
-
+        vgrid_cheb += vbdy2cheb.reshape((vbdy2cheb.size//3,3))
+        vgrid_cube += vbdy2cube.reshape((vbdy2cube.size//3,3))
+      
+      grid_cube = grid_cube.reshape((grid_cube.size//3,3))
       if self.bodies:
-        loc = self.bodies[0].location_new
-        ids = (grid_points[:,0]-loc[0])**2 + (loc[1]-grid_points[:,1])**2 + (loc[2]-grid_points[:,2])**2 <= self.bodies[0].radius**2
-        vgrid[ids] = 0
-        vgrid[ids] = self.bodies[0].velocity_new
+        loc = self.bodies[0].location
+        ids = np.sqrt(((grid_cube[:,0]-loc[0])/self.body_a)**2 + ((loc[1]-grid_cube[:,1])/self.body_b)**2 + ((loc[2]-grid_cube[:,2])/self.body_c)**2) <= 1
+        vgrid_cube[ids] = 0
+        vgrid_cube[ids] = self.bodies[0].velocity
 
-        rgrid = grid_points[ids] - loc
-        omega_b = self.bodies[0].angular_velocity_new
-        vgrid[ids,0] += omega_b[1]*rgrid[:,2] - omega_b[2]*rgrid[:,1]
-        vgrid[ids,1] += omega_b[2]*rgrid[:,0] - omega_b[0]*rgrid[:,2]
-        vgrid[ids,2] += omega_b[0]*rgrid[:,1] - omega_b[1]*rgrid[:,0]
-
-
-      # Loop over fibers to get their 2d projections, then calculate the curvature
-      name = self.output_name + '_fibCurv_at_step' + str(self.step_now) + '.txt'
-      f_curv = open(name, 'w')
-      normxyz = np.array([0, 0, 1])
-      for k, fib in enumerate(self.fibers):
-        xyz_2d = np.zeros_like(fib.x)
-        for idx in np.arange(fib.num_points):
-          dotProduct = normxyz[0]*fib.x[idx,0] + normxyz[1]*fib.x[idx,1] + normxyz[2]*fib.x[idx,2]
-          
-          xyz_2d[idx,0] = fib.x[idx,0] - normxyz[0] * dotProduct
-          xyz_2d[idx,1] = fib.x[idx,1] - normxyz[1] * dotProduct
-          xyz_2d[idx,2] = fib.x[idx,2] - normxyz[2] * dotProduct
-        
-        indx = np.where(self.fib_mat_resolutions == fib.num_points)
-        # Get the class that has the matrices
-        fib_mat = self.fib_mats[indx[0][0]]
-        D_1, D_2, D_3, D_4 = fib_mat.get_matrices(fib.length_previous, fib.num_points, 'Ds')
-        xs = np.dot(D_1, xyz_2d)
-        xss = np.dot(D_2, xyz_2d)
-        curv = (xs[:,0]*xss[:,1] - xs[:,1]*xss[:,0]) / (xs[:,0]**2 + xs[:,1]**2)**1.5
-        np.savetxt(f_curv, np.array([fib.num_points]))
-        np.savetxt(f_curv, curv)
-      f_curv.close()
+        rgrid = grid_cube[ids] - loc
+        omega_b = self.bodies[0].angular_velocity
+        vgrid_cube[ids,0] += omega_b[1]*rgrid[:,2] - omega_b[2]*rgrid[:,1]
+        vgrid_cube[ids,1] += omega_b[2]*rgrid[:,0] - omega_b[0]*rgrid[:,2]
+        vgrid_cube[ids,2] += omega_b[0]*rgrid[:,1] - omega_b[1]*rgrid[:,0]
 
       # Save velocity and the grid points
-      f_grid_points = open(self.output_name + '_grid_points.txt', 'w')
-      np.savetxt(f_grid_points,grid_points)
-      f_grid_points.close()
-
-      name = self.output_name + '_velocity_at_step' + str(self.step_now) + '.txt'
-      f_grid_velocity = open(name, 'w')
-      np.savetxt(f_grid_velocity, vgrid)
-      f_grid_velocity.close()
-
-      vfiber = vfib_all + vfib_self + vfib_self2 + vfib_pol + vfib2fib.reshape((vfib2fib.size//3,3)) + vbdy2fib.reshape((vbdy2fib.size//3,3))
-      vfiber2 = vfib_all + vfib_self + vfib_self2 - vfib_pol + vfib2fib.reshape((vfib2fib.size//3,3)) + vbdy2fib.reshape((vbdy2fib.size//3,3))
-      vfiber3 = vfib_all + vfib_self + vfib_self2 + vfib2fib.reshape((vfib2fib.size//3,3)) + vbdy2fib.reshape((vbdy2fib.size//3,3))
-
-
-      name = self.output_name + '_fiber_velocity3_at_step' + str(self.step_now) + '.txt'
-      f_fiber_velocity = open(name, 'w')
-      np.savetxt(f_fiber_velocity, vfiber3)
-      f_fiber_velocity.close()
-
-
-      name = self.output_name + '_forceTorque_at_step' + str(self.step_now) + '.txt'
-      f_forceTorque_body = open(name, 'w')
-      np.savetxt(f_forceTorque_body, force_hinged)
-      np.savetxt(f_forceTorque_body, torque_hinged)
-      np.savetxt(f_forceTorque_body, force_free)
-      np.savetxt(f_forceTorque_body, torque_free)
-      f_forceTorque_body.close()
-
-      name = self.output_name + '_force_hingedMTs_at_step' + str(self.step_now) + '.txt'
-      f_force_hinged = open(name, 'w')
-      name = self.output_name + '_force_freeMTs_at_step' + str(self.step_now) + '.txt'
-      f_force_free = open(name, 'w')
-      name = self.output_name + '_torque_hingedMTs_at_step' + str(self.step_now) + '.txt'
-      f_torque_hinged = open(name, 'w')
-      name = self.output_name + '_torque_freeMTs_at_step' + str(self.step_now) + '.txt'
-      f_torque_free = open(name, 'w')
-      name = self.output_name + '_forceDensity_at_step' + str(self.step_now) + '.txt'
-      f_force_density = open(name, 'w')
-      for k, fib in enumerate(self.fibers):
-        nucsite = np.ones((1,3)) * fib.nuc_site_idx
-        np.savetxt(f_force_density,nucsite)
-        np.savetxt(f_force_density, force_density[offset_fibers[k]:offset_fibers[k+1]])
-        if fib.iReachSurface:
-          np.savetxt(f_force_hinged, fib.force_on_body)
-          np.savetxt(f_torque_hinged, fib.torque_on_body)
-        else:
-          np.savetxt(f_force_free, fib.force_on_body)
-          np.savetxt(f_torque_free, fib.torque_on_body)
-      f_force_free.close()
-      f_torque_free.close()
-      f_force_hinged.close()
-      f_torque_hinged.close()
+      grid_cube = grid_cube.reshape((grid_cube.size//3,3))
+      grid_cheb = grid_cheb.reshape((grid_cheb.size//3,3))
       
-      #name = self.output_name + '_body_stresslet_velocity_at_step' + str(self.step_now) + '.txt'
-      #f_file = open(name, 'w')
-      #np.savetxt(f_file, vbdy2bdy_stresslet.reshape((vbdy2bdy_stresslet.size//3,3)))
-      #f_file.close()
+      location_old, orientation_old = self.bodies[0].location, self.bodies[0].orientation
+      self.bodies[0].location = np.copy(self.bodies[0].location_new)
+      self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
+       
+      vgrid_cheb = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cheb,0,translate=False)
+      vgrid_cube = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cube,0,translate=False)
+      
+      self.bodies[0].location = location_old
+      self.bodies[0].orientation = orientation_old 
+      
+      name = self.output_name + 'cheb_grid_at_step' + str(self.step_now) + '.txt'
+      f_grid = open(name, 'w')
+      np.savetxt(f_grid,grid_cheb)
+      f_grid.close()
 
-      #name = self.output_name + '_body_freeForce_velocity_at_step' + str(self.step_now) + '.txt'
-      #f_file = open(name, 'w')
-      #np.savetxt(f_file, vbdy2bdy_free_force.reshape((vbdy2bdy_stresslet.size//3,3)))
-      #f_file.close()
+      name = self.output_name + '_cheb_velocity_at_step' + str(self.step_now) + '.txt'
+      f_grid_velocity = open(name, 'w')
+      np.savetxt(f_grid_velocity, vgrid_cheb)
+      f_grid_velocity.close()
+      
+      name = self.output_name + 'cube_grid_at_step' + str(self.step_now) + '.txt'
+      f_grid = open(name, 'w')
+      np.savetxt(f_grid,grid_cube)
+      f_grid.close()
 
-      #name = self.output_name + '_body_freeTorque_velocity_at_step' + str(self.step_now) + '.txt'
-      #f_file = open(name, 'w')
-      #np.savetxt(f_file, vbdy2bdy_free_torque.reshape((vbdy2bdy_stresslet.size//3,3)))
-      #f_file.close()
-
-      #name = self.output_name + '_body_hingedForce_velocity_at_step' + str(self.step_now) + '.txt'
-      #f_file = open(name, 'w')
-      #np.savetxt(f_file, vbdy2bdy_hinged_force.reshape((vbdy2bdy_stresslet.size//3,3)))
-      #f_file.close()
-
-      #name = self.output_name + '_body_hingedTorque_velocity_at_step' + str(self.step_now) + '.txt'
-      #f_file = open(name, 'w')
-      #np.savetxt(f_file, vbdy2bdy_hinged_torque.reshape((vbdy2bdy_stresslet.size//3,3)))
-      #f_file.close()
-
-      #name = self.output_name + '_body_fromFiber_velocity_at_step' + str(self.step_now) + '.txt'
-      #f_file = open(name, 'w')
-      #np.savetxt(f_file, vfib2bdy_in.reshape((vbdy2bdy_stresslet.size//3,3)))
-      #f_file.close()
-
-      #name = self.output_name + '_body_fromShell_velocity_at_step' + str(self.step_now) + '.txt'
-      #f_file = open(name, 'w')
-      #np.savetxt(f_file, vshell2bdy_in.reshape((vbdy2bdy_stresslet.size//3,3)))
-      #f_file.close()
+      name = self.output_name + '_cube_velocity_at_step' + str(self.step_now) + '.txt'
+      f_grid_velocity = open(name, 'w')
+      np.savetxt(f_grid_velocity, vgrid_cube)
+      f_grid_velocity.close()
+      
+      # Prepara data for VTK writer 
+      variables = [np.reshape(vgrid_cube, vgrid_cube.size)] 
+      num_points_dir = int(np.ceil(np.power(grid_cube.size//3,1/3)))
+      dims = np.array([num_points_dir+1, num_points_dir+1, num_points_dir+1], dtype=np.int32) 
+      nvars = 1
+      vardims = np.array([3])
+      centering = np.array([0])
+      varnames = ['velocity\0']
+      name = self.output_name + '_onCube_atStep' + str(self.step_now) + '.velocity_field.vtk'
+      #edges_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_edges_cube, 0)  
+      edges_x = np.copy(self.ref_edges_cube_x)
+      edges_y = np.copy(self.ref_edges_cube_y)
+      edges_z = np.copy(self.ref_edges_cube_z)
+      
+      # Write velocity field
+      if True:
+        visit_writer.boost_write_rectilinear_mesh(name,      # File's name
+                                                  0,         # 0=ASCII,  1=Binary
+                                                  dims,      # {mx, my, mz}
+                                                  edges_x,     # xmesh
+                                                  edges_y,     # ymesh
+                                                  edges_z,     # zmesh
+                                                  nvars,     # Number of variables
+                                                  vardims,   # Size of each variable, 1=scalar, velocity=3*scalars
+                                                  centering, # Write to cell centers of corners
+                                                  varnames,  # Variables' names
+                                                  variables) # Variables
     return # time_step_hydro
 
   ##############################################################################################
