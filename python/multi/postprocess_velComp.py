@@ -9,7 +9,7 @@ from tstep import postprocess_velocity
 if __name__ == '__main__':
 
   nskip = 900
-  numRes = 3
+  numRes = 1
   output_file = '/work2/03353/gokberk/frontera/flagellaRuns/postprocessVelocity/run'
   nucleating_site_file = '/work2/03353/gokberk/frontera/flagellaRuns/test5/run_links_location.txt'
   
@@ -65,6 +65,7 @@ if __name__ == '__main__':
                                   fiber_ds = 0.5/32)
 
   prams = initialize.set_parameters(eta = 1,
+      Efib = 1,
       nucleating_site_file = nucleating_site_file,
       bodies_file = bodies_file,
       fibers_file = fibers_file,
@@ -74,7 +75,8 @@ if __name__ == '__main__':
       body_b = 2,
       body_c = 4,
       body_shape = 'ellipsoid',
-      velMeasureP = 32)
+      velMeasureP = 32,
+      velMeasureRad = 2 * 2 * 4)
 
   # Initialize the files
   time_steps, time_all, nsteps_all = initialize.initialize_from_file(options, prams)

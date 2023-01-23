@@ -145,7 +145,8 @@ class set_parameters(object):
                body_b = None,
                body_c = None,
                body_r = None,
-               velMeasureP = None):
+               velMeasureP = None,
+               velMeasureRad = None):
     # FLOW PARAMETERS
     self.nucleating_site_file = nucleating_site_file
     self.bodies_file = bodies_file
@@ -175,6 +176,7 @@ class set_parameters(object):
     self.body_c = body_c
     self.body_r = body_r
     self.velMeasureP = velMeasureP
+    self.velMeasureRad = velMeasureRad
     self.fiber_body_attached = fiber_body_attached
 def initialize_from_file(options,prams):
   '''

@@ -346,7 +346,6 @@ class fiber(object):
     A = np.zeros((4 * num_points_up, 4 * num_points_down))
     I = np.eye(num_points)
     I_vec = np.diag(I)
-
     # Build submatrices to couple coordinates to coordinates
     A_XX = self.beta_tstep * (I / self.dt) \
            + (self.E * self.c_0) * (D_4.T * (I_vec + xs[:,0]**2)).T \

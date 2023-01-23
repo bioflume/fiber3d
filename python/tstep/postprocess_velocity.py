@@ -124,7 +124,6 @@ class postprocess_velocity(object):
     # OPEN A FILE TO KEEP LOGS
     f_log = open(self.output_name + '_postprocessing.logFile', 'w+')
 
-    self.bodies_ref = copy.copy(self.bodies)
     self.ref_grid_cheb = generateGrid.generate_grid(self.velP, self.velMeasureRad)
     if prams.body_shape == 'ellipsoid':
       max_size = np.max([prams.body_a, prams.body_b, prams.body_c]) # max radius
@@ -171,6 +170,7 @@ class postprocess_velocity(object):
     self.A_inv_bodies = []
     if options.Nblobs is not None:
       self.bodies = self.time_steps[0].bodies
+      self.bodies_ref = copy.copy(self.bodies)
       Nblobs = options.Nblobs
       if prams.body_shape == 'sphere':
         self.bodies[0].discretize_body_surface(shape = prams.body_shape, Nblobs = Nblobs, radius = 1/1.04 * prams.body_r)
@@ -353,8 +353,6 @@ class postprocess_velocity(object):
     trg_fib = np.zeros((offset_fibers[-1],3))
     xsDs_block, ysDs_block, zsDs_block = [], [], []
     for k,fib in enumerate(self.fibers):
-      print(fib.num_points)
-      print(fib.x.shape)
 
       istart = offset + offset_bodies[-1]*3 + 6*len(self.bodies) + 4*offset_fibers[k]
       x0[3*offset_fibers[k] + 0 : 3*offset_fibers[k] + 3*fib.num_points + 0 : 3] = fib.x[:,0]
