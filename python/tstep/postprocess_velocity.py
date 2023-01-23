@@ -33,6 +33,7 @@ from quadratures import Smooth_Closed_Surface_Quadrature_RBF
 from periphery import periphery
 from kernels import kernels
 from mpi4py import MPI
+import generateGrid
 
 import _pickle as cpickle
 

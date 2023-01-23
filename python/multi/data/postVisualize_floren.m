@@ -1,11 +1,11 @@
 clc; clear all;
 
 % Add the path of the run files
-addpath ./floren_data/
+addpath ./test6/
 
-n_save = 100;
-n_comp = 900;
-nskip = 10;
+n_save = 1000;
+n_comp = 1000;
+nskip = 1;
 
 % Colors
 fiber_FC = [166/255,217/255, 106/255];
