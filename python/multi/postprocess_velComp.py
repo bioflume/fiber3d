@@ -50,13 +50,10 @@ if __name__ == '__main__':
   options = initialize.set_options(adaptive_num_points = False,
                                   num_points = Nfiber,
                                   num_points_max = num_points_max,
-                                  adaptive_time = False,
-                                  order = 1,
                                   dt = dt,
                                   tol_gmres = 1e-10,
                                   n_save = 900,
                                   output_name=output_file,
-                                  save_file = None,
                                   precompute_body_PC = precompute_body_PC,
                                   useFMM = False,
                                   Nblobs = Nbody,
@@ -65,9 +62,7 @@ if __name__ == '__main__':
                                   integration = 'trapz',
                                   num_points_finite_diff = 4,
                                   inextensibility = 'penalty',
-                                  min_body_ds = 0.01,
-                                  fiber_ds = 0.5/32,
-                                  repulsion = False)
+                                  fiber_ds = 0.5/32)
 
   prams = initialize.set_parameters(eta = 1,
       nucleating_site_file = nucleating_site_file,

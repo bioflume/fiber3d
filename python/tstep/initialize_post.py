@@ -15,7 +15,6 @@ import scipy.sparse.linalg as scspla
 import argparse
 import subprocess
 import time
-import stkfmm
 import os
 from scipy.spatial import ConvexHull
 try:
@@ -82,9 +81,11 @@ class set_options(object):
     iExternalForce = False,
     iCytoPulling = False,
     iNoSliding = False,
-    dynInstability = True):
+    dynInstability = True,
+    adaptive_num_points = False):
     # RUN OPTIONS (~ALGORITHMS)
     self.repulsion = repulsion
+    self.adaptive_num_points = adaptive_num_points
     self.filtering = filtering
     self.dt = dt
     self.tol_gmres = tol_gmres
@@ -120,6 +121,7 @@ class set_parameters(object):
                bodies_file = None,
                fibers_file = None,
                time_step_file = None,
+               fiber_body_attached = True,
                eta = 1.0,
                epsilon = 1e-03,
                Efib = None,
@@ -173,6 +175,7 @@ class set_parameters(object):
     self.body_c = body_c
     self.body_r = body_r
     self.velMeasureP = velMeasureP
+    self.fiber_body_attached = fiber_body_attached
 def initialize_from_file(options,prams):
   '''
   Read data from input files, initialize fibers, bodies and molecular motors
@@ -271,7 +274,7 @@ def initialize_from_file(options,prams):
             fibers.append(ifiber)
           else:
             if k > 0: fibers.append(ifiber)
-        offset = offset + Nfib + 1
+        offset = offset + Nfib + 2
       offset = offset + 1
       iSaveStep = False
       if idFile == 0:

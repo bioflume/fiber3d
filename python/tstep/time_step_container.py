@@ -7,7 +7,6 @@ import scipy.sparse.linalg as scspla
 import sys
 import time
 import copy
-import stkfmm
 import os
 
 from scipy.spatial import ConvexHull

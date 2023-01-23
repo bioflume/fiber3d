@@ -7,7 +7,6 @@ import scipy.sparse.linalg as scspla
 import sys
 import time
 import copy
-import stkfmm
 import os
 
 try:
@@ -93,7 +92,9 @@ class postprocess_velocity(object):
     self.body_c = prams.body_c
     self.body_r = prams.body_r
     self.velMeasureP = prams.velMeasureP
-    
+    self.velMeasureRad = prams.velMeasureRad
+    self.velP = prams.velMeasureP
+
     if self.useFMM:
       self.write_message('FMM is in use:')
       self.write_message('FMM order: ' + str(options.fmm_order))
@@ -121,6 +122,9 @@ class postprocess_velocity(object):
     self.beta, self.Xcoeff, self.rhsCoeff = 1.0, [1.0], [1.0]
     # OPEN A FILE TO KEEP LOGS
     f_log = open(self.output_name + '_postprocessing.logFile', 'w+')
+
+    self.bodies_ref = copy.copy(self.bodies)
+    self.ref_grid_cheb = generateGrid.generate_grid(self.velP, self.velMeasureRad)
     if prams.body_shape == 'ellipsoid':
       max_size = np.max([prams.body_a, prams.body_b, prams.body_c]) # max radius
       Lcube = 3*(2*max_size) # 3 * max_diameter
