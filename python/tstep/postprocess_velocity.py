@@ -1115,7 +1115,15 @@ class postprocess_velocity(object):
     f_body = open(name,'w')
     np.savetxt(f_body, np.ones((1,7), dtype=int))
     orientation = self.bodies[0].orientation.entries
-    np.savetxt(f_body, np.ones((1,7), dtype=int)*self.bodies[0].radius)
+    out = np.ones((1,7))
+    if self.body_shape is 'sphere':
+      out[0][0] = self.body_r
+    elif self.body_shape is 'ellipsoid':
+      out[0][0] = self.body_a
+      out[0][1] = self.body_b
+      out[0][2] = self.body_c
+      
+    np.savetxt(f_body, out)
     out_body = np.array([self.bodies[0].location[0],
                          self.bodies[0].location[1],
                          self.bodies[0].location[2],
