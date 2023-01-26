@@ -162,3 +162,4 @@ cython_debug/
 *.vtk
 python/multi/.DS_Store
 python/multi/data/.DS_Store
+*.png

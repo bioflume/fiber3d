@@ -292,7 +292,18 @@ class postprocess_velocity(object):
 
       self.fibers = self.time_steps[idx].fibers
       bodies = self.time_steps[idx].bodies
-      self.bodies[0].location = np.copy(bodies[0].location)
+      
+      # if we do not rotate
+      dx = bodies[0].location[0]
+      dy = bodies[0].location[1]
+      dz = bodies[0].location[2]
+      
+      for k, fib in enumerate(self.fibers):
+        fib.x[:,0] -= dx
+        fib.x[:,1] -= dy
+        fib.x[:,2] -= dz
+      
+      #self.bodies[0].location = np.copy(bodies[0].location)
       self.bodies[0].orientation = copy.copy(bodies[0].orientation)
       self.bodies[0].active_sites_idcs = copy.copy(bodies[0].active_sites_idcs)
 
@@ -887,15 +898,18 @@ class postprocess_velocity(object):
     # -------------------------------------------------
 
     if True:
-      location_old, orientation_old = np.copy(self.bodies[0].location), copy.copy(self.bodies[0].orientation)
-      self.bodies[0].location = np.copy(self.bodies[0].location_new)
-      self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
+      #location_old, orientation_old = np.copy(self.bodies[0].location), copy.copy(self.bodies[0].orientation)
+      #self.bodies[0].location = np.copy(self.bodies[0].location_new)
+      #self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
       
-      grid_cheb = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cheb, 0)
-      grid_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cube, 0)
+      #grid_cheb = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cheb, 0)
+      #grid_cube = tstep_utils.get_vectors_frame_body(self.bodies, self.ref_grid_cube, 0)
       
-      self.bodies[0].location = location_old
-      self.bodies[0].orientation = orientation_old
+      grid_cheb = np.copy(self.ref_grid_cheb)
+      grid_cube = np.copy(self.ref_grid_cube)
+      
+      #self.bodies[0].location = location_old
+      #self.bodies[0].orientation = orientation_old
 
       grid_cheb = grid_cheb.flatten()
       grid_cube = grid_cube.flatten()
@@ -1050,8 +1064,8 @@ class postprocess_velocity(object):
       self.bodies[0].location = np.copy(self.bodies[0].location_new)
       self.bodies[0].orientation = copy.copy(self.bodies[0].orientation_new)
        
-      vgrid_cheb = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cheb,0,translate=False)
-      vgrid_cube = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cube,0,translate=False)
+      #vgrid_cheb = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cheb,0,translate=False)
+      #vgrid_cube = tstep_utils.get_vectors_frame_body(self.bodies,vgrid_cube,0,translate=False)
       
       self.bodies[0].location = location_old
       self.bodies[0].orientation = orientation_old 
