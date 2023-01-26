@@ -9,7 +9,7 @@ from tstep import postprocess_velocity
 if __name__ == '__main__':
 
   nskip = 900
-  numRes = 1
+  numRes = 2
   output_file = '/work2/03353/gokberk/frontera/flagellaRuns/postprocessVelocity/run'
   nucleating_site_file = '/work2/03353/gokberk/frontera/flagellaRuns/test5/run_links_location.txt'
   
