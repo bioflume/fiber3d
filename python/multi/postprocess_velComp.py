@@ -37,7 +37,7 @@ if __name__ == '__main__':
       filename = '/work2/03353/gokberk/frontera/flagellaRuns/test5_resume2/run_time_system_size.txt'
       time_step_file.append(filename)
 
-  Nbody = 1200
+  Nbody = 1500
   precompute_body_PC = True
   dt = 0.0025
   num_points_max = 256

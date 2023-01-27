@@ -41,7 +41,8 @@ while found_functions is False:
     from quadratures import Smooth_Closed_Surface_Quadrature_RBF
     from periphery import periphery
     from tstep import time_step_container
-
+    from tstep import fiber_matrices
+    
     found_functions = True
   except ImportError:
     path_to_append += '../'
@@ -215,6 +216,7 @@ def initialize_from_file(options,prams):
     body_data = np.loadtxt(prams.bodies_file[idFile], delimiter = ' ')
     offset, offset_body = 0, 0
     step_idcs = np.int32(nsteps / options.n_save)
+    fib_mat = []
     for k in step_idcs:
       bodies = []
       fibers = []
@@ -248,14 +250,25 @@ def initialize_from_file(options,prams):
         Nfib = int(fiber_data[offset+1, 0])
         Lfib = fiber_data[offset+1, 2]
         xyz_fib = fiber_data[offset + 2: offset+2+Nfib,:3]
+        if options.num_points != Nfib:
+          if fib_mat:
+            P_up, P_down, out3, out4 = fib_mat.get_matrices(Lfib, options.num_points, 'P_upsample')
+          else:
+            fib_mat = fiber_matrices.fiber_matrices(num_points = Nfib, num_points_finite_diff = options.num_points_finite_diff, uprate_poten = options.uprate)
+            fib_mat.compute_matrices()
+            P_up, P_down, out3, out4 = fib_mat.get_matrices(Lfib, options.num_points, 'P_upsample')
+          xyz_fib = np.dot(P_up, xyz_fib)
+          Nnew = options.num_points
+        else:
+          Nnew = Nfib
         if xyz_fib.size//3 == Nfib:
           d2sites_x = xyz_fib[0,0] - nuc_sites_xyz[:,0]
           d2sites_y = xyz_fib[0,1] - nuc_sites_xyz[:,1]
           d2sites_z = xyz_fib[0,2] - nuc_sites_xyz[:,2]
-
+          print('Num points: ', Nnew)
           d2sites_r = np.sqrt(d2sites_x**2 + d2sites_y**2 + d2sites_z**2)
           nuc_site_idx = np.argmin(d2sites_r)
-          ifiber = fiber.fiber(num_points = Nfib,
+          ifiber = fiber.fiber(num_points = Nnew,
                                num_points_max = options.num_points_max,
                                num_points_finite_diff = options.num_points_finite_diff,
                                dt = options.dt,
