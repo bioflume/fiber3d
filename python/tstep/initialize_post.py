@@ -252,16 +252,20 @@ def initialize_from_file(options,prams):
         xyz_fib = fiber_data[offset + 2: offset+2+Nfib,:3]
         if options.num_points != Nfib:
           if fib_mat:
-            P_up, P_down, out3, out4 = fib_mat.get_matrices(Lfib, options.num_points, 'P_upsample')
+            alpha_o, s, out3, out4 = fib_mat.get_matrices(Lfib, options.num_points, 'alpha_and_s')
+            alpha = np.linspace(-1,1,options.num_points)
+            P_adap = bary.barycentricMatrix(alpha_o, alpha)
           else:
             fib_mat = fiber_matrices.fiber_matrices(num_points = Nfib, num_points_finite_diff = options.num_points_finite_diff, uprate_poten = options.uprate)
             fib_mat.compute_matrices()
-            P_up, P_down, out3, out4 = fib_mat.get_matrices(Lfib, options.num_points, 'P_upsample')
-          xyz_fib = np.dot(P_up, xyz_fib)
+            alpha_o, s, out3, out4 = fib_mat.get_matrices(Lfib, options.num_points, 'alpha_and_s')
+            alpha = np.linspace(-1,1,options.num_points)
+            P_adap = bary.barycentricMatrix(alpha_o, alpha)
+          xyz_fib = np.dot(P_adap, xyz_fib)
           Nnew = options.num_points
         else:
           Nnew = Nfib
-        if xyz_fib.size//3 == Nfib:
+        if xyz_fib.size//3 == Nnew:
           d2sites_x = xyz_fib[0,0] - nuc_sites_xyz[:,0]
           d2sites_y = xyz_fib[0,1] - nuc_sites_xyz[:,1]
           d2sites_z = xyz_fib[0,2] - nuc_sites_xyz[:,2]
