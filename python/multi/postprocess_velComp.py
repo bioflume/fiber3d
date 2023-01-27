@@ -9,7 +9,7 @@ from tstep import postprocess_velocity
 if __name__ == '__main__':
 
   nskip = 900
-  numRes = 2
+  numRes = 1
   output_file = '/work2/03353/gokberk/frontera/flagellaRuns/postprocessVelocity/run'
   nucleating_site_file = '/work2/03353/gokberk/frontera/flagellaRuns/test5/run_links_location.txt'
   
@@ -37,11 +37,11 @@ if __name__ == '__main__':
       filename = '/work2/03353/gokberk/frontera/flagellaRuns/test5_resume2/run_time_system_size.txt'
       time_step_file.append(filename)
 
-  Nbody = 800
+  Nbody = 1200
   precompute_body_PC = True
   dt = 0.0025
   num_points_max = 256
-  Nfiber = 64
+  Nfiber = 128
 
 
   # SIMULATION'S OPTIONS AND PARAMETERS
